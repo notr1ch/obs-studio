@@ -85,6 +85,12 @@ if(WIN32)
 		ws2_32
 		winmm
 		Iphlpapi)
+
+	if (WITH_RTMPS)
+		set(obs-outputs_PLATFORM_DEPS
+			${obs-outputs_PLATFORM_DEPS}
+			crypt32)
+	endif()
 endif()
 
 if(MSVC)
