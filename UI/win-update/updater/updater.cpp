@@ -1141,6 +1141,13 @@ static bool Update(wchar_t *cmdLine)
 	SetDlgItemTextW(hwndMain, IDC_STATUS,
 			L"Searching for available updates...");
 
+	HWND hProgress = GetDlgItem(hwndMain, IDC_PROGRESS);
+	LONG_PTR style = GetWindowLongPtr(hProgress, GWL_STYLE);
+	SetWindowLongPtr(hProgress, GWL_STYLE, style | PBS_MARQUEE);
+
+	SendDlgItemMessage(hwndMain, IDC_PROGRESS,
+		PBM_SETMARQUEE, 1, 0);
+
 	/* ------------------------------------- *
 	 * Check if updating portable build      */
 
@@ -1249,6 +1256,11 @@ static bool Update(wchar_t *cmdLine)
 			return false;
 		}
 	}
+
+	SendDlgItemMessage(hwndMain, IDC_PROGRESS,
+		PBM_SETMARQUEE, 0, 0);
+
+	SetWindowLongPtr(hProgress, GWL_STYLE, style);
 
 	/* ------------------------------------- *
 	 * Exit if updates already installed     */
