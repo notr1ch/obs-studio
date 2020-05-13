@@ -110,7 +110,6 @@ static void rtmp_stream_destroy(void *data)
 		}
 	}
 
-	RTMP_TLS_Free(&stream->rtmp);
 	free_packets(stream);
 	dstr_free(&stream->path);
 	dstr_free(&stream->key);
@@ -944,14 +943,7 @@ static int try_connect(struct rtmp_stream *stream)
 
 	info("Connecting to RTMP URL %s...", stream->path.array);
 
-	// this should have been called already by rtmp_stream_create
-	//RTMP_Init(&stream->rtmp);
-
-	// since we don't call RTMP_Init above, there's no other good place
-	// to reset this as doing it in RTMP_Close breaks the ugly RTMP
-	// authentication system
-	memset(&stream->rtmp.Link, 0, sizeof(stream->rtmp.Link));
-	stream->rtmp.last_error_code = 0;
+	RTMP_Init(&stream->rtmp);
 
 	if (!RTMP_SetupURL(&stream->rtmp, stream->path.array))
 		return OBS_OUTPUT_BAD_PATH;

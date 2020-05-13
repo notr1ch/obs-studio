@@ -87,6 +87,7 @@ static const char *my_dhm_G = "4";
 #include <openssl/buffer.h>
 #endif
 
+TLS_CTX RTMP_TLS_ctx = NULL;
 #endif
 
 #define RTMP_SIG_SIZE 1536
@@ -284,9 +285,9 @@ RTMP_LibVersion()
 }
 
 void
-RTMP_TLS_LoadCerts(RTMP *r) {
+RTMP_TLS_LoadCerts() {
 #ifdef USE_MBEDTLS
-    mbedtls_x509_crt *chain = r->RTMP_TLS_ctx->cacert = calloc(1, sizeof(struct mbedtls_x509_crt));
+    mbedtls_x509_crt *chain = RTMP_TLS_ctx->cacert = calloc(1, sizeof(struct mbedtls_x509_crt));
     mbedtls_x509_crt_init(chain);
 
 #if defined(_WIN32)
@@ -350,7 +351,7 @@ RTMP_TLS_LoadCerts(RTMP *r) {
     }
 #endif
 
-    mbedtls_ssl_conf_ca_chain(&r->RTMP_TLS_ctx->conf, chain, NULL);
+    mbedtls_ssl_conf_ca_chain(&RTMP_TLS_ctx->conf, chain, NULL);
     return;
 
 error:
@@ -359,31 +360,30 @@ error:
         "fail");
     mbedtls_x509_crt_free(chain);
     free(chain);
-    r->RTMP_TLS_ctx->cacert = NULL;
-#else /* USE_MBEDTLS */
-	UNUSED_PARAMETER(r);
+    RTMP_TLS_ctx->cacert = NULL;
 #endif /* USE_MBEDTLS */
 }
 
 void
-RTMP_TLS_Init(RTMP *r)
+RTMP_TLS_Init()
 {
 #ifdef CRYPTO
 #if defined(USE_MBEDTLS)
     const char * pers = "RTMP_TLS";
-    r->RTMP_TLS_ctx = calloc(1,sizeof(struct tls_ctx));
+    assert (!RTMP_TLS_ctx);
+    RTMP_TLS_ctx = calloc(1,sizeof(struct tls_ctx));
 
-    mbedtls_ssl_config_init(&r->RTMP_TLS_ctx->conf);
-    mbedtls_ctr_drbg_init(&r->RTMP_TLS_ctx->ctr_drbg);
-    mbedtls_entropy_init(&r->RTMP_TLS_ctx->entropy);
+    mbedtls_ssl_config_init(&RTMP_TLS_ctx->conf);
+    mbedtls_ctr_drbg_init(&RTMP_TLS_ctx->ctr_drbg);
+    mbedtls_entropy_init(&RTMP_TLS_ctx->entropy);
 
-    mbedtls_ctr_drbg_seed(&r->RTMP_TLS_ctx->ctr_drbg,
+    mbedtls_ctr_drbg_seed(&RTMP_TLS_ctx->ctr_drbg,
                           mbedtls_entropy_func,
-                          &r->RTMP_TLS_ctx->entropy,
+                          &RTMP_TLS_ctx->entropy,
                           (const unsigned char *)pers,
                           strlen(pers));
 
-    RTMP_TLS_LoadCerts(r);
+    RTMP_TLS_LoadCerts();
 #elif defined(USE_POLARSSL)
     /* Do this regardless of NO_SSL, we use havege for rtmpe too */
     RTMP_TLS_ctx = calloc(1,sizeof(struct tls_ctx));
@@ -414,26 +414,22 @@ RTMP_TLS_Init(RTMP *r)
 }
 
 void
-RTMP_TLS_Free(RTMP *r) {
+RTMP_TLS_Free() {
 #ifdef USE_MBEDTLS
+    assert (RTMP_TLS_ctx);
+    mbedtls_ssl_config_free(&RTMP_TLS_ctx->conf);
+    mbedtls_ctr_drbg_free(&RTMP_TLS_ctx->ctr_drbg);
+    mbedtls_entropy_free(&RTMP_TLS_ctx->entropy);
 
-    if (!r->RTMP_TLS_ctx)
-        return;
-    mbedtls_ssl_config_free(&r->RTMP_TLS_ctx->conf);
-    mbedtls_ctr_drbg_free(&r->RTMP_TLS_ctx->ctr_drbg);
-    mbedtls_entropy_free(&r->RTMP_TLS_ctx->entropy);
-
-    if (r->RTMP_TLS_ctx->cacert) {
-        mbedtls_x509_crt_free(r->RTMP_TLS_ctx->cacert);
-        free(r->RTMP_TLS_ctx->cacert);
-        r->RTMP_TLS_ctx->cacert = NULL;
+    if (RTMP_TLS_ctx->cacert) {
+        mbedtls_x509_crt_free(RTMP_TLS_ctx->cacert);
+        free(RTMP_TLS_ctx->cacert);
+        RTMP_TLS_ctx->cacert = NULL;
     }
 
     // NO mbedtls_net_free() BECAUSE WE SET IT UP BY HAND!
-    free(r->RTMP_TLS_ctx);
-    r->RTMP_TLS_ctx = NULL;
-#else
-	UNUSED_PARAMETER(r);
+    free(RTMP_TLS_ctx);
+    RTMP_TLS_ctx = NULL;
 #endif
 }
 
@@ -446,15 +442,17 @@ RTMP_Alloc()
 void
 RTMP_Free(RTMP *r)
 {
-#if defined(CRYPTO) && defined(USE_MBEDTLS)
-    RTMP_TLS_Free(r);
-#endif
     free(r);
 }
 
 void
 RTMP_Init(RTMP *r)
 {
+#ifdef CRYPTO
+    // must call RTMP_TLS_Init before RTMP_Init
+    assert (RTMP_TLS_ctx);
+#endif
+
     memset(r, 0, sizeof(RTMP));
     r->m_sb.sb_socket = -1;
     r->m_inChunkSize = RTMP_DEFAULT_CHUNKSIZE;
@@ -470,11 +468,6 @@ RTMP_Init(RTMP *r)
     r->Link.nStreams = 0;
     r->Link.timeout = 30;
     r->Link.swfAge = 30;
-
-#ifdef CRYPTO
-    RTMP_TLS_Init(r);
-#endif
-
 }
 
 void
@@ -930,16 +923,15 @@ RTMP_Connect0(RTMP *r, struct sockaddr * service, socklen_t addrlen)
     return TRUE;
 }
 
-int
 RTMP_Connect1(RTMP *r, RTMPPacket *cp)
 {
     if (r->Link.protocol & RTMP_FEATURE_SSL)
     {
 #if defined(CRYPTO) && !defined(NO_SSL)
-        TLS_client(r->RTMP_TLS_ctx, r->m_sb.sb_ssl);
+        TLS_client(RTMP_TLS_ctx, r->m_sb.sb_ssl);
 
 #if defined(USE_MBEDTLS)
-        mbedtls_net_context *server_fd = &r->RTMP_TLS_ctx->net;
+        mbedtls_net_context *server_fd = &RTMP_TLS_ctx->net;
         server_fd->fd = r->m_sb.sb_socket;
         TLS_setfd(r->m_sb.sb_ssl, server_fd);
 

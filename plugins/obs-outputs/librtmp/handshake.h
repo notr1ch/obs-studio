@@ -890,7 +890,7 @@ HandShake(RTMP * r, int FP9HandShake)
             dhposClient = getdh(clientsig, RTMP_SIG_SIZE);
             RTMP_Log(RTMP_LOGDEBUG, "%s: DH pubkey position: %d", __FUNCTION__, dhposClient);
 
-            if (!DHGenerateKey(r))
+            if (!DHGenerateKey(r->Link.dh))
             {
                 RTMP_Log(RTMP_LOGERROR, "%s: Couldn't generate Diffie-Hellmann public key!",
                          __FUNCTION__);

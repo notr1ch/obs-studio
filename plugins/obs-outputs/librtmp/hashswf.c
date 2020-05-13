@@ -78,6 +78,9 @@ typedef mbedtls_md_context_t *HMAC_CTX;
 #define HMAC_close(ctx)	HMAC_CTX_cleanup(&ctx)
 #endif
 
+extern void RTMP_TLS_Init();
+extern TLS_CTX RTMP_TLS_ctx;
+
 #include <zlib.h>
 
 #endif /* CRYPTO */
