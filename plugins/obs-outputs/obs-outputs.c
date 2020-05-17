@@ -24,8 +24,8 @@ extern struct obs_output_info ftl_output_info;
 // ugly hack for mbedTLS, it must be initialized
 // and freed by the same thread. this is the only
 // good place to do it.
-extern void RTMP_TLS_Init();
-extern void RTMP_TLS_Free();
+extern void RTMP_OBS_Init();
+extern void RTMP_OBS_Free();
 
 bool obs_module_load(void)
 {
@@ -34,7 +34,7 @@ bool obs_module_load(void)
 	WSAStartup(MAKEWORD(2, 2), &wsad);
 #endif
 
-	RTMP_TLS_Init();
+	RTMP_OBS_Init();
 
 	obs_register_output(&rtmp_output_info);
 	obs_register_output(&null_output_info);
@@ -47,7 +47,7 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
-	RTMP_TLS_Free();
+	RTMP_OBS_Free();
 #ifdef _WIN32
 	WSACleanup();
 #endif

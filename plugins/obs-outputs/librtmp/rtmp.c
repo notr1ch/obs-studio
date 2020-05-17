@@ -384,6 +384,10 @@ RTMP_TLS_Init()
                           strlen(pers));
 
     RTMP_TLS_LoadCerts();
+
+#ifndef MBEDTLS_THREADING_C
+    RTMP_Log(RTMP_LOGWARNING, "%s: missing MBEDTLS_THREADING_C, no thread safety!", __FUNCTION__);
+#endif
 #elif defined(USE_POLARSSL)
     /* Do this regardless of NO_SSL, we use havege for rtmpe too */
     RTMP_TLS_ctx = calloc(1,sizeof(struct tls_ctx));
@@ -431,6 +435,19 @@ RTMP_TLS_Free() {
     free(RTMP_TLS_ctx);
     RTMP_TLS_ctx = NULL;
 #endif
+}
+
+extern void log_rtmp(int level, const char *format, va_list args);
+
+void
+RTMP_OBS_Init() {
+    RTMP_LogSetCallback(log_rtmp);
+    RTMP_TLS_Init();
+}
+
+void
+RTMP_OBS_Free() {
+    RTMP_TLS_Free();
 }
 
 RTMP *

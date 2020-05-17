@@ -41,7 +41,7 @@ static const char *rtmp_stream_getname(void *unused)
 	return obs_module_text("RTMPStream");
 }
 
-static void log_rtmp(int level, const char *format, va_list args)
+void log_rtmp(int level, const char *format, va_list args)
 {
 	if (level > RTMP_LOGWARNING)
 		return;
@@ -144,7 +144,6 @@ static void *rtmp_stream_create(obs_data_t *settings, obs_output_t *output)
 	stream->output = output;
 	pthread_mutex_init_value(&stream->packets_mutex);
 
-	RTMP_LogSetCallback(log_rtmp);
 	RTMP_Init(&stream->rtmp);
 	RTMP_LogSetLevel(RTMP_LOGWARNING);
 
