@@ -2230,6 +2230,10 @@ EXPORT void obs_source_frame_copy(struct obs_source_frame *dst,
 /* Get source icon type */
 EXPORT enum obs_icon_type obs_source_get_icon_type(const char *id);
 
+/* ------------------------------------------------------------------------- */
+/* Debugging functions */
+EXPORT void obs_debug_verify_empty_source_list(void);
+
 #ifdef __cplusplus
 }
 #endif
