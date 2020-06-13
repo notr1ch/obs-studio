@@ -2961,7 +2961,16 @@ void obs_source_show_preloaded_video(obs_source_t *source)
 	if (!obs_source_valid(source, "obs_source_show_preloaded_video"))
 		return;
 
+	if (!source->async_preload_frame)
+		return;
+
+	obs_enter_graphics();
+
+	update_async_textures(source, source->async_preload_frame,
+			      source->async_textures, source->async_texrender);
 	source->async_active = true;
+
+	obs_leave_graphics();
 
 	pthread_mutex_lock(&source->audio_buf_mutex);
 	sys_ts = (source->monitoring_type != OBS_MONITORING_TYPE_MONITOR_ONLY)

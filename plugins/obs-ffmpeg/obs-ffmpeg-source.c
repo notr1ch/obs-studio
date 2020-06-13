@@ -235,6 +235,7 @@ static void get_frame(void *opaque, struct obs_source_frame *f)
 {
 	struct ffmpeg_source *s = opaque;
 	obs_source_output_video(s->source, f);
+	FF_BLOG(LOG_INFO, "get_frame: %llu", f->timestamp);
 }
 
 static void preload_frame(void *opaque, struct obs_source_frame *f)
@@ -242,6 +243,9 @@ static void preload_frame(void *opaque, struct obs_source_frame *f)
 	struct ffmpeg_source *s = opaque;
 	if (s->close_when_inactive)
 		return;
+
+	FF_BLOG(LOG_INFO, "preload_frame: %llu", f->timestamp);
+	//f->timestamp = 0;
 
 	if (s->is_clear_on_media_end || s->is_looping)
 		obs_source_preload_video(s->source, f);
@@ -309,8 +313,11 @@ static void ffmpeg_source_start(struct ffmpeg_source *s)
 
 	if (s->media_valid) {
 		mp_media_play(&s->media, s->is_looping);
-		if (s->is_local_file)
+		if (s->is_local_file && (s->is_clear_on_media_end ||
+		    s->is_looping))
 			obs_source_show_preloaded_video(s->source);
+		else
+			obs_source_output_video(s->source, NULL);
 		set_media_state(s, OBS_MEDIA_STATE_PLAYING);
 		obs_source_media_started(s->source);
 	}

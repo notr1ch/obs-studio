@@ -409,6 +409,9 @@ static void mp_media_next_video(mp_media_t *m, bool preload)
 		d->got_first_keyframe = true;
 	}
 
+	blog(LOG_INFO, "mp_media_next_video: cb for frame PTS %llu",
+	     d->frame_pts);
+
 	if (preload)
 		m->v_preload_cb(m->opaque, frame);
 	else
@@ -533,6 +536,9 @@ static inline bool mp_media_eof(mp_media_t *m)
 
 	if (eof) {
 		bool looping;
+
+		blog(LOG_INFO, "next: %llu, cur: %llu\n",
+		     m->next_ns, os_gettime_ns());
 
 		pthread_mutex_lock(&m->mutex);
 		looping = m->looping;
