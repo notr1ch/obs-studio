@@ -18,6 +18,7 @@
 #include "window-namedialog.hpp"
 #include "qt-wrappers.hpp"
 #include "obs-app.hpp"
+#include "platform.hpp"
 
 #include <QVBoxLayout>
 
@@ -79,6 +80,13 @@ bool NameDialog::AskForName(QWidget *parent, const QString &title,
 	dialog.userText->setText(placeHolder);
 	dialog.userText->selectAll();
 
+#ifdef _WIN32
+	dialog.show();
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(dialog.windowHandle(), hideFromCapture);
+#endif
+
 	if (dialog.exec() != DialogCode::Accepted) {
 		return false;
 	}
@@ -102,6 +110,13 @@ bool NameDialog::AskForNameWithOption(QWidget *parent, const QString &title,
 	dialog.userText->setText(placeHolder);
 	dialog.checkbox->setText(optionLabel);
 	dialog.checkbox->setChecked(optionChecked);
+
+#ifdef _WIN32
+	dialog.show();
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(dialog.windowHandle(), hideFromCapture);
+#endif
 
 	if (dialog.exec() != DialogCode::Accepted) {
 		return false;

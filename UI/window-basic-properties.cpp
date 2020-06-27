@@ -21,6 +21,7 @@
 #include "qt-wrappers.hpp"
 #include "display-helpers.hpp"
 #include "properties-view.hpp"
+#include "platform.hpp"
 
 #include <QCloseEvent>
 #include <QScreen>
@@ -477,6 +478,11 @@ void OBSBasicProperties::closeEvent(QCloseEvent *event)
 void OBSBasicProperties::Init()
 {
 	show();
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(this->windowHandle(), hideFromCapture);
+#endif
 }
 
 int OBSBasicProperties::CheckSettings()

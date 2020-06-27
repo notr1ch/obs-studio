@@ -23,6 +23,7 @@
 #include <vector>
 
 class QWidget;
+class QWindow;
 
 /* Gets the path of obs-studio specific data files (such as locale) */
 bool GetDataFilePath(const char *data, std::string &path);

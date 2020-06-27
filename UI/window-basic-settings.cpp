@@ -387,6 +387,7 @@ OBSBasicSettings::OBSBasicSettings(QWidget *parent)
 	HookWidget(ui->theme, 		     COMBO_CHANGED,  GENERAL_CHANGED);
 	HookWidget(ui->enableAutoUpdates,    CHECK_CHANGED,  GENERAL_CHANGED);
 	HookWidget(ui->openStatsOnStartup,   CHECK_CHANGED,  GENERAL_CHANGED);
+	HookWidget(ui->hideWindowFromCapture,CHECK_CHANGED,  GENERAL_CHANGED);
 	HookWidget(ui->warnBeforeStreamStart,CHECK_CHANGED,  GENERAL_CHANGED);
 	HookWidget(ui->warnBeforeStreamStop, CHECK_CHANGED,  GENERAL_CHANGED);
 	HookWidget(ui->warnBeforeRecordStop, CHECK_CHANGED,  GENERAL_CHANGED);
@@ -629,6 +630,7 @@ OBSBasicSettings::OBSBasicSettings(QWidget *parent)
 	delete ui->enableLowLatencyMode;
 	delete ui->browserHWAccel;
 	delete ui->sourcesGroup;
+	delete ui->hideWindowFromCapture;
 #if defined(__APPLE__) || HAVE_PULSEAUDIO
 	delete ui->disableAudioDucking;
 #endif
@@ -643,6 +645,7 @@ OBSBasicSettings::OBSBasicSettings(QWidget *parent)
 	ui->enableLowLatencyMode = nullptr;
 	ui->browserHWAccel = nullptr;
 	ui->sourcesGroup = nullptr;
+	ui->hideWindowFromCapture = nullptr;
 #if defined(__APPLE__) || HAVE_PULSEAUDIO
 	ui->disableAudioDucking = nullptr;
 #endif
@@ -1217,6 +1220,12 @@ void OBSBasicSettings::LoadGeneralSettings()
 	bool openStatsOnStartup = config_get_bool(main->Config(), "General",
 						  "OpenStatsOnStartup");
 	ui->openStatsOnStartup->setChecked(openStatsOnStartup);
+
+#if defined(_WIN32)
+	bool hideWindowFromCapture = config_get_bool(
+		GetGlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	ui->hideWindowFromCapture->setChecked(hideWindowFromCapture);
+#endif
 
 	bool recordWhenStreaming = config_get_bool(
 		GetGlobalConfig(), "BasicWindow", "RecordWhenStreaming");
@@ -2958,6 +2967,31 @@ void OBSBasicSettings::SaveGeneralSettings()
 		config_set_bool(GetGlobalConfig(), "General",
 				"EnableAutoUpdates",
 				ui->enableAutoUpdates->isChecked());
+#endif
+#ifdef _WIN32
+	if (WidgetChanged(ui->hideWindowFromCapture)) {
+		bool hide_window = ui->hideWindowFromCapture->isChecked();
+		config_set_bool(GetGlobalConfig(), "BasicWindow",
+				"HideWindowFromCapture", hide_window);
+
+		QWindowList windows = QGuiApplication::allWindows();
+		for (auto window : windows) {
+			if (window->isVisible()) {
+				bool is_projector = false;
+				for (auto projector : main->projectors) {
+					if (projector->windowHandle() ==
+					    window) {
+						is_projector = true;
+						break;
+					}
+				}
+
+				if (!is_projector)
+					SetWin32DisplayAffinity(window,
+								hide_window);
+			}
+		}
+	}
 #endif
 	if (WidgetChanged(ui->openStatsOnStartup))
 		config_set_bool(main->Config(), "General", "OpenStatsOnStartup",

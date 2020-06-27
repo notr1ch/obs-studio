@@ -23,6 +23,7 @@
 #include "visibility-item-widget.hpp"
 #include "item-widget-helpers.hpp"
 #include "obs-app.hpp"
+#include "platform.hpp"
 
 #include <QMessageBox>
 #include <QCloseEvent>
@@ -171,6 +172,11 @@ OBSBasicFilters::~OBSBasicFilters()
 void OBSBasicFilters::Init()
 {
 	show();
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(this->windowHandle(), hideFromCapture);
+#endif
 }
 
 inline OBSSource OBSBasicFilters::GetFilter(int row, bool async)

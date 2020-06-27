@@ -20,6 +20,7 @@
 #include <QApplication>
 #include <QMessageBox>
 #include <QWidget>
+#include <QWindow>
 #include <QThread>
 #include <obs.hpp>
 
@@ -36,6 +37,10 @@ class QWidget;
 class QLayout;
 class QString;
 struct gs_window;
+
+#ifdef _WIN32
+void SetWin32DisplayAffinity(QWindow *window, bool hide_window);
+#endif
 
 class OBSMessageBox {
 public:

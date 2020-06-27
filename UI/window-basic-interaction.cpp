@@ -20,6 +20,7 @@
 #include "window-basic-main.hpp"
 #include "qt-wrappers.hpp"
 #include "display-helpers.hpp"
+#include "platform.hpp"
 
 #include <QKeyEvent>
 #include <QCloseEvent>
@@ -382,4 +383,9 @@ bool OBSBasicInteraction::HandleKeyEvent(QKeyEvent *event)
 void OBSBasicInteraction::Init()
 {
 	show();
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(this->windowHandle(), hideFromCapture);
+#endif
 }

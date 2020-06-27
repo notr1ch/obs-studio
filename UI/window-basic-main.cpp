@@ -1841,6 +1841,10 @@ void OBSBasic::OBSInit()
 
 #ifndef _WIN32
 	show();
+#else
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(this->windowHandle(), hideFromCapture);
 #endif
 
 	/* setup stats dock */
@@ -1995,6 +1999,13 @@ void OBSBasic::OnFirstLoad()
 		if (!logView)
 			logView = new OBSLogViewer();
 		logView->show();
+#ifdef _WIN32
+		bool hideFromCapture = config_get_bool(App()->GlobalConfig(),
+						       "BasicWindow",
+						       "HideWindowFromCapture");
+		SetWin32DisplayAffinity(logView->windowHandle(),
+					hideFromCapture);
+#endif
 	}
 }
 
@@ -2151,6 +2162,10 @@ void OBSBasic::ShowWhatsNew(const QString &url)
 	topLayout->addLayout(bottomLayout);
 
 	dlg->show();
+
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(dlg->windowHandle(), hideFromCapture);
 #else
 	UNUSED_PARAMETER(url);
 #endif
@@ -4352,6 +4367,11 @@ void OBSBasic::on_actionRemux_triggered()
 	remuxDlg = new OBSRemux(path, this);
 	remuxDlg->show();
 	remux = remuxDlg;
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(remuxDlg->windowHandle(), hideFromCapture);
+#endif
 }
 
 void OBSBasic::on_action_Settings_triggered()
@@ -4375,6 +4395,15 @@ void OBSBasic::on_action_Settings_triggered()
 
 	{
 		OBSBasicSettings settings(this);
+		settings.show();
+
+#ifdef _WIN32
+		bool hideFromCapture = config_get_bool(App()->GlobalConfig(),
+						       "BasicWindow",
+						       "HideWindowFromCapture");
+		SetWin32DisplayAffinity(settings.windowHandle(),
+					hideFromCapture);
+#endif
 		settings.exec();
 	}
 
@@ -4407,6 +4436,13 @@ void OBSBasic::on_actionAdvAudioProperties_triggered()
 	advAudioWindow->show();
 	advAudioWindow->setAttribute(Qt::WA_DeleteOnClose, true);
 	advAudioWindow->SetIconsVisible(iconsVisible);
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(advAudioWindow->windowHandle(),
+				hideFromCapture);
+#endif
 
 	connect(advAudioWindow, SIGNAL(destroyed()), this,
 		SLOT(on_advAudioProps_destroyed()));
@@ -5073,6 +5109,14 @@ void OBSBasic::AddSource(const char *id)
 {
 	if (id && *id) {
 		OBSBasicSourceSelect sourceSelect(this, id);
+#ifdef _WIN32
+		sourceSelect.show();
+		bool hideFromCapture = config_get_bool(App()->GlobalConfig(),
+						       "BasicWindow",
+						       "HideWindowFromCapture");
+		SetWin32DisplayAffinity(sourceSelect.windowHandle(),
+					hideFromCapture);
+#endif
 		sourceSelect.exec();
 		if (sourceSelect.newSource && strcmp(id, "group") != 0)
 			CreatePropertiesWindow(sourceSelect.newSource);
@@ -5391,6 +5435,12 @@ void OBSBasic::on_actionViewCurrentLog_triggered()
 		logView->activateWindow();
 		logView->raise();
 	}
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(logView->windowHandle(), hideFromCapture);
+#endif
 }
 
 void OBSBasic::on_actionShowCrashLogs_triggered()
@@ -5943,6 +5993,13 @@ void OBSBasic::AutoRemux()
 
 	OBSRemux *remux = new OBSRemux(QT_TO_UTF8(path), this, true);
 	remux->show();
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(remux->windowHandle(), hideFromCapture);
+#endif
+
 	remux->AutoRemux(input, output);
 }
 
@@ -6662,6 +6719,13 @@ void OBSBasic::on_actionEditTransform_triggered()
 	transformWindow = new OBSBasicTransform(this);
 	transformWindow->show();
 	transformWindow->setAttribute(Qt::WA_DeleteOnClose, true);
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(transformWindow->windowHandle(),
+				hideFromCapture);
+#endif
 }
 
 static obs_transform_info copiedTransformInfo;
@@ -8003,6 +8067,13 @@ void OBSBasic::on_autoConfigure_triggered()
 	AutoConfig test(this);
 	test.setModal(true);
 	test.show();
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(test.windowHandle(), hideFromCapture);
+#endif
+
 	test.exec();
 }
 
@@ -8018,6 +8089,12 @@ void OBSBasic::on_stats_triggered()
 	statsDlg = new OBSBasicStats(nullptr);
 	statsDlg->show();
 	stats = statsDlg;
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(statsDlg->windowHandle(), hideFromCapture);
+#endif
 }
 
 void OBSBasic::on_actionShowAbout_triggered()
@@ -8027,8 +8104,13 @@ void OBSBasic::on_actionShowAbout_triggered()
 
 	about = new OBSAbout(this);
 	about->show();
-
 	about->setAttribute(Qt::WA_DeleteOnClose, true);
+
+#ifdef _WIN32
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(about->windowHandle(), hideFromCapture);
+#endif
 }
 
 void OBSBasic::ResizeOutputSizeOfSource()

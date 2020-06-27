@@ -17,6 +17,7 @@
 
 #include "qt-wrappers.hpp"
 #include "obs-app.hpp"
+#include "platform.hpp"
 
 #include <graphics/graphics.h>
 #include <util/threading.h>
@@ -31,6 +32,28 @@
 
 #if !defined(_WIN32) && !defined(__APPLE__)
 #include <QX11Info>
+#endif
+
+#ifdef _WIN32
+/* this is a really ugly place for this function, but as qt-wrappers is
+   pulled in by a few plugins, we don't really have any other good place
+   to put this where it's available globally */
+#include <Windows.h>
+void SetWin32DisplayAffinity(QWindow *window, bool hide_window)
+{
+	/* this cannot be used on hidden windows and causes some weird
+	   internal window state to get broken (notably window geometry) */
+	assert(window->isVisible());
+	if (!window->isVisible())
+		return;
+
+	HWND hwnd = (HWND)window->winId();
+
+	if (hide_window)
+		SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+	else
+		SetWindowDisplayAffinity(hwnd, WDA_NONE);
+}
 #endif
 
 static inline void OBSErrorBoxva(QWidget *parent, const char *msg, va_list args)
@@ -76,6 +99,12 @@ OBSMessageBox::question(QWidget *parent, const QString &title,
 	translate_button(Retry);
 	translate_button(Ignore);
 #undef translate_button
+#ifdef _WIN32
+	mb.show();
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(mb.windowHandle(), hideFromCapture);
+#endif
 	return (QMessageBox::StandardButton)mb.exec();
 }
 
@@ -85,6 +114,13 @@ void OBSMessageBox::information(QWidget *parent, const QString &title,
 	QMessageBox mb(QMessageBox::Information, title, text, QMessageBox::Ok,
 		       parent);
 	mb.setButtonText(QMessageBox::Ok, QTStr("OK"));
+
+#ifdef _WIN32
+	mb.show();
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(mb.windowHandle(), hideFromCapture);
+#endif
 	mb.exec();
 }
 
@@ -96,6 +132,13 @@ void OBSMessageBox::warning(QWidget *parent, const QString &title,
 	if (enableRichText)
 		mb.setTextFormat(Qt::RichText);
 	mb.setButtonText(QMessageBox::Ok, QTStr("OK"));
+
+#ifdef _WIN32
+	mb.show();
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(mb.windowHandle(), hideFromCapture);
+#endif
 	mb.exec();
 }
 
@@ -105,6 +148,13 @@ void OBSMessageBox::critical(QWidget *parent, const QString &title,
 	QMessageBox mb(QMessageBox::Critical, title, text, QMessageBox::Ok,
 		       parent);
 	mb.setButtonText(QMessageBox::Ok, QTStr("OK"));
+
+#ifdef _WIN32
+	mb.show();
+	bool hideFromCapture = config_get_bool(
+		App()->GlobalConfig(), "BasicWindow", "HideWindowFromCapture");
+	SetWin32DisplayAffinity(mb.windowHandle(), hideFromCapture);
+#endif
 	mb.exec();
 }
 
