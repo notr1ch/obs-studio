@@ -101,6 +101,8 @@ struct mp_media {
 	bool seek;
 	bool seek_next_ts;
 	int64_t seek_pos;
+
+	os_event_t *play_event;
 };
 
 typedef struct mp_media mp_media_t;

@@ -717,8 +717,10 @@ static inline bool mp_media_thread(mp_media_t *m)
 			continue;
 		}
 
-		if (pause)
+		if (pause) {
+			os_event_timedwait(m->play_event, 10);
 			continue;
+		}
 
 		/* frames are ready */
 		if (is_active && !timeout) {
@@ -761,6 +763,10 @@ static inline bool mp_media_init_internal(mp_media_t *m,
 	}
 	if (os_sem_init(&m->sem, 0) != 0) {
 		blog(LOG_WARNING, "MP: Failed to init semaphore");
+		return false;
+	}
+	if (os_event_init(&m->play_event, OS_EVENT_TYPE_AUTO) != 0) {
+		blog(LOG_WARNING, "MP: Failed to init event ");
 		return false;
 	}
 
@@ -824,6 +830,7 @@ static void mp_kill_thread(mp_media_t *m)
 		m->kill = true;
 		pthread_mutex_unlock(&m->mutex);
 		os_sem_post(m->sem);
+		os_event_signal(m->play_event);
 
 		pthread_join(m->thread, NULL);
 	}
@@ -863,6 +870,7 @@ void mp_media_play(mp_media_t *m, bool loop, bool reconnecting)
 	pthread_mutex_unlock(&m->mutex);
 
 	os_sem_post(m->sem);
+	os_event_signal(m->play_event);
 }
 
 void mp_media_play_pause(mp_media_t *m, bool pause)
@@ -871,6 +879,11 @@ void mp_media_play_pause(mp_media_t *m, bool pause)
 	if (m->active) {
 		m->pause = pause;
 		m->reset_ts = !pause;
+
+		if (pause)
+			os_event_reset(m->play_event);
+		else
+			os_event_signal(m->play_event);
 	}
 	pthread_mutex_unlock(&m->mutex);
 
