@@ -16,4 +16,7 @@ DEFINE_GUID(CLSID_OBS_VirtualVideo,
             0x@GUID_VAL09@,
             0x@GUID_VAL10@,
             0x@GUID_VAL11@);
+#define VIDEO_NAME L"OBSVirtualCamVideo@VIRTUALCAM_GUID@"
+#else
+#define VIDEO_NAME L"OBSVirtualCamVideo"
 #endif
