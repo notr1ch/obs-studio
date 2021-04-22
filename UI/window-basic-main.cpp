@@ -4697,12 +4697,14 @@ void OBSBasic::on_scenes_currentItemChanged(QListWidgetItem *current,
 {
 	obs_source_t *source = NULL;
 
-	if (current) {
-		obs_scene_t *scene;
+	// Ignore any changes triggered by the listbox is being cleared on shutdown
+	if (!current)
+		return;
 
-		scene = GetOBSRef<OBSScene>(current);
-		source = obs_scene_get_source(scene);
-	}
+	obs_scene_t *scene;
+
+	scene = GetOBSRef<OBSScene>(current);
+	source = obs_scene_get_source(scene);
 
 	SetCurrentScene(source);
 
