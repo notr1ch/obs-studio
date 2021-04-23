@@ -142,7 +142,9 @@ static bool load_lib(void)
 		return false;
 
 	SetDllDirectoryA(path);
+	uint64_t ss = os_gettime_ns();
 	nv_audiofx = LoadLibrary(L"NVAudioEffects.dll");
+	uint64_t now = os_gettime_ns();
 	SetDllDirectoryA(NULL);
 
 	return !!nv_audiofx;

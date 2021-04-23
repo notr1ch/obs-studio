@@ -19,6 +19,7 @@
 bool nvafx_loaded = false;
 #ifdef LIBNVAFX_ENABLED
 #include "nvafx-load.h"
+#include <pthread.h>
 #endif
 
 /* -------------------------------------------------------- */
@@ -109,11 +110,16 @@ struct noise_suppress_data {
 	float intensity_ratio;
 	unsigned int num_samples_per_frame, num_channels;
 	char *model;
+
 	bool nvafx_initialized;
 
 	/* Resampler */
 	audio_resampler_t *nvafx_resampler;
 	audio_resampler_t *nvafx_resampler_back;
+
+	bool nvafx_loading;
+	pthread_t nvafx_thread;
+	pthread_mutex_t nvafx_mutex;
 #endif
 	/* PCM buffers */
 	float *copy_buffers[MAX_PREPROC_CHANNELS];
@@ -151,6 +157,10 @@ static const char *noise_suppress_name(void *unused)
 static void noise_suppress_destroy(void *data)
 {
 	struct noise_suppress_data *ng = data;
+
+#ifdef LIBNVAFX_ENABLED
+	pthread_mutex_lock(&ng->nvafx_mutex);
+#endif
 
 	for (size_t i = 0; i < ng->channels; i++) {
 #ifdef LIBSPEEXDSP_ENABLED
@@ -190,6 +200,10 @@ static void noise_suppress_destroy(void *data)
 		audio_resampler_destroy(ng->nvafx_resampler_back);
 	}
 	bfree(ng->model);
+	if (ng->use_nvafx)
+		pthread_join(ng->nvafx_thread, NULL);
+	pthread_mutex_unlock(&ng->nvafx_mutex);
+	pthread_mutex_destroy(&ng->nvafx_mutex);
 #endif
 
 	bfree(ng->copy_buffers[0]);
@@ -198,13 +212,19 @@ static void noise_suppress_destroy(void *data)
 	bfree(ng);
 }
 
-static inline bool nvafx_initialize(void *data)
+static void *nvafx_initialize(void *data)
 {
 #ifdef LIBNVAFX_ENABLED
 	struct noise_suppress_data *ng = data;
 	int err;
+
+	do_log(LOG_ERROR, "nvafx_initialize");
+
 	if (!ng->use_nvafx || !nvafx_loaded)
-		return false;
+		return NULL;
+
+	pthread_mutex_lock(&ng->nvafx_mutex);
+	do_log(LOG_ERROR, "nvafx_initialize -> in mutex");
 	if (!ng->handle[0]) {
 		ng->sample_rate = NVAFX_SAMPLE_RATE;
 
@@ -216,7 +236,8 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_CreateEffect() failed, error %i",
 				       err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			err = NvAFX_SetU32(ng->handle[i],
 					   NVAFX_PARAM_DENOISER_SAMPLE_RATE,
@@ -226,7 +247,8 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_SetU32(Sample Rate: %f) failed, error %i",
 				       ng->sample_rate, err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			// initial setting of intensity to 1.0f
 			err = NvAFX_SetFloat(
@@ -238,7 +260,8 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_SetFloat(Intensity Ratio: %f) failed, error %i",
 				       1.0f, err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			err = NvAFX_SetString(ng->handle[i],
 					      NVAFX_PARAM_DENOISER_MODEL_PATH,
@@ -248,7 +271,8 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_SetString() failed, error %i",
 				       err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			err = NvAFX_Load(ng->handle[i]);
 			if (err != NVAFX_STATUS_SUCCESS) {
@@ -256,7 +280,8 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_Load() failed with error %i",
 				       err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 		}
 		if (ng->use_nvafx) {
@@ -268,13 +293,15 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_GetU32() failed to get the number of channels, error %i",
 				       err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			if (ng->num_channels != 1) {
 				do_log(LOG_ERROR,
 				       "The number of channels is not 1 in the sdk any more ==> update code");
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			NvAFX_Status err = NvAFX_GetU32(
 				ng->handle[0],
@@ -285,17 +312,22 @@ static inline bool nvafx_initialize(void *data)
 				       "NvAFX_GetU32() failed to get the number of samples per frame, error %i",
 				       err);
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 			if (ng->num_samples_per_frame != NVAFX_FRAME_SIZE) {
 				do_log(LOG_ERROR,
 				       "The number of samples per frame has changed from 480 (= 10 ms) ==> update code");
 				ng->use_nvafx = false;
-				return false;
+				pthread_mutex_unlock(&ng->nvafx_mutex);
+				return NULL;
 			}
 		}
 	}
-	return true;
+	do_log(LOG_ERROR, "nvafx_initialize -> success");
+	ng->nvafx_initialized = true;
+	pthread_mutex_unlock(&ng->nvafx_mutex);
+	return NULL;
 #else
 	UNUSED_PARAMETER(data);
 	return false;
@@ -365,20 +397,28 @@ static void noise_suppress_update(void *data, obs_data_t *s)
 
 #ifdef LIBNVAFX_ENABLED
 	ng->intensity_ratio = (float)obs_data_get_double(s, S_NVAFX_INTENSITY);
-	if (ng->nvafx_initialized && ng->use_nvafx) {
-		int err;
-		for (int i = 0; i < MAX_PREPROC_CHANNELS; i++) {
-			err = NvAFX_SetFloat(
-				ng->handle[i],
-				NVAFX_PARAM_DENOISER_INTENSITY_RATIO,
-				ng->intensity_ratio);
-			if (err != NVAFX_STATUS_SUCCESS) {
-				do_log(LOG_ERROR,
-				       "NvAFX_SetFloat(Intensity Ratio: %f) failed, error %i",
-				       ng->intensity_ratio, err);
-				ng->use_nvafx = false;
+	if (ng->use_nvafx) {
+		do_log(LOG_ERROR,
+		       "noise_suppress_update -> try to enter mutex");
+		pthread_mutex_lock(&ng->nvafx_mutex);
+		do_log(LOG_ERROR, "noise_suppress_update -> in mutex");
+		if (ng->nvafx_initialized) {
+			int err;
+			for (int i = 0; i < MAX_PREPROC_CHANNELS; i++) {
+				err = NvAFX_SetFloat(
+					ng->handle[i],
+					NVAFX_PARAM_DENOISER_INTENSITY_RATIO,
+					ng->intensity_ratio);
+				if (err != NVAFX_STATUS_SUCCESS) {
+					do_log(LOG_ERROR,
+					       "NvAFX_SetFloat(Intensity Ratio: %f) failed, error %i",
+					       ng->intensity_ratio, err);
+					ng->use_nvafx = false;
+				}
 			}
 		}
+		do_log(LOG_ERROR, "noise_suppress_update -> release mutex");
+		pthread_mutex_unlock(&ng->nvafx_mutex);
 	}
 #endif
 	/* Ignore if already allocated */
@@ -387,8 +427,11 @@ static void noise_suppress_update(void *data, obs_data_t *s)
 		return;
 #endif
 #ifdef LIBNVAFX_ENABLED
-	if (ng->use_nvafx && ng->nvafx_initialized)
+	if (ng->use_nvafx && (ng->nvafx_initialized || ng->nvafx_loading)) {
+		do_log(LOG_ERROR,
+		       "noise_suppress_update -> already loading / loaded");
 		return;
+	}
 #endif
 #ifdef LIBRNNOISE_ENABLED
 	if (ng->use_rnnoise && ng->rnn_states[0])
@@ -425,8 +468,11 @@ static void noise_suppress_update(void *data, obs_data_t *s)
 	}
 
 #ifdef LIBNVAFX_ENABLED
-	if (!ng->nvafx_initialized && ng->use_nvafx)
-		ng->nvafx_initialized = nvafx_initialize(data);
+	if (!ng->nvafx_initialized && ng->use_nvafx && !ng->nvafx_loading) {
+		do_log(LOG_ERROR, "noise_suppress_update -> start loading");
+		ng->nvafx_loading = true;
+		pthread_create(&ng->nvafx_thread, NULL, nvafx_initialize, ng);
+	}
 #endif
 	for (size_t i = 0; i < channels; i++)
 		alloc_channel(ng, sample_rate, i, frames);
@@ -541,6 +587,9 @@ static void *noise_suppress_create(obs_data_t *settings, obs_source_t *filter)
 		ng->model = buffer;
 		ng->nvafx_enabled = true;
 		ng->nvafx_initialized = false;
+		ng->nvafx_loading = false;
+
+		pthread_mutex_init(&ng->nvafx_mutex, PTHREAD_MUTEX_DEFAULT);
 
 		info("NVAFX SDK redist path was found here %s", sdk_path);
 	}
