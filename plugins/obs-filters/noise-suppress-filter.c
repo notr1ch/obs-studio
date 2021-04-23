@@ -138,6 +138,11 @@ struct noise_suppress_data {
 	DARRAY(float) output_data;
 };
 
+#ifdef LIBNVAFX_ENABLED
+/* global mutex for nvafx load functions since they aren't thread-safe */
+pthread_mutex_t nvafx_initializer_mutex;
+#endif
+
 /* -------------------------------------------------------- */
 
 #define SUP_MIN -60
@@ -224,7 +229,9 @@ static void *nvafx_initialize(void *data)
 		return NULL;
 
 	pthread_mutex_lock(&ng->nvafx_mutex);
-	do_log(LOG_ERROR, "nvafx_initialize -> in mutex");
+	do_log(LOG_ERROR, "nvafx_initialize -> in filter mutex");
+	pthread_mutex_lock(&nvafx_initializer_mutex);
+	do_log(LOG_ERROR, "nvafx_initialize -> in global mutex");
 	if (!ng->handle[0]) {
 		ng->sample_rate = NVAFX_SAMPLE_RATE;
 
@@ -235,9 +242,7 @@ static void *nvafx_initialize(void *data)
 				do_log(LOG_ERROR,
 				       "NvAFX_CreateEffect() failed, error %i",
 				       err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			err = NvAFX_SetU32(ng->handle[i],
 					   NVAFX_PARAM_DENOISER_SAMPLE_RATE,
@@ -246,9 +251,7 @@ static void *nvafx_initialize(void *data)
 				do_log(LOG_ERROR,
 				       "NvAFX_SetU32(Sample Rate: %f) failed, error %i",
 				       ng->sample_rate, err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			// initial setting of intensity to 1.0f
 			err = NvAFX_SetFloat(
@@ -259,9 +262,7 @@ static void *nvafx_initialize(void *data)
 				do_log(LOG_ERROR,
 				       "NvAFX_SetFloat(Intensity Ratio: %f) failed, error %i",
 				       1.0f, err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			err = NvAFX_SetString(ng->handle[i],
 					      NVAFX_PARAM_DENOISER_MODEL_PATH,
@@ -270,18 +271,14 @@ static void *nvafx_initialize(void *data)
 				do_log(LOG_ERROR,
 				       "NvAFX_SetString() failed, error %i",
 				       err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			err = NvAFX_Load(ng->handle[i]);
 			if (err != NVAFX_STATUS_SUCCESS) {
 				do_log(LOG_ERROR,
 				       "NvAFX_Load() failed with error %i",
 				       err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 		}
 		if (ng->use_nvafx) {
@@ -292,16 +289,12 @@ static void *nvafx_initialize(void *data)
 				do_log(LOG_ERROR,
 				       "NvAFX_GetU32() failed to get the number of channels, error %i",
 				       err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			if (ng->num_channels != 1) {
 				do_log(LOG_ERROR,
 				       "The number of channels is not 1 in the sdk any more ==> update code");
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			NvAFX_Status err = NvAFX_GetU32(
 				ng->handle[0],
@@ -311,16 +304,12 @@ static void *nvafx_initialize(void *data)
 				do_log(LOG_ERROR,
 				       "NvAFX_GetU32() failed to get the number of samples per frame, error %i",
 				       err);
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 			if (ng->num_samples_per_frame != NVAFX_FRAME_SIZE) {
 				do_log(LOG_ERROR,
 				       "The number of samples per frame has changed from 480 (= 10 ms) ==> update code");
-				ng->use_nvafx = false;
-				pthread_mutex_unlock(&ng->nvafx_mutex);
-				return NULL;
+				goto failure;
 			}
 		}
 	}
@@ -328,6 +317,13 @@ static void *nvafx_initialize(void *data)
 	ng->nvafx_initialized = true;
 	pthread_mutex_unlock(&ng->nvafx_mutex);
 	return NULL;
+
+failure:
+	ng->use_nvafx = false;
+	pthread_mutex_unlock(&nvafx_initializer_mutex);
+	pthread_mutex_unlock(&ng->nvafx_mutex);
+	return NULL;
+
 #else
 	UNUSED_PARAMETER(data);
 	return false;
@@ -529,6 +525,8 @@ bool load_nvafx(void)
 	} else {
 		blog(LOG_INFO, "[noise suppress: Nvidia RTX denoiser enabled]");
 	}
+
+	pthread_mutex_init(&nvafx_initializer_mutex, PTHREAD_MUTEX_DEFAULT);
 
 #define LOAD_SYM_FROM_LIB(sym, lib, dll)                                   \
 	if (!(sym = (sym##_t)GetProcAddress(lib, #sym))) {                 \
