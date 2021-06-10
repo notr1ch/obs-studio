@@ -43,10 +43,10 @@ extern "C" EXPORT struct winrt_disaptcher *winrt_dispatcher_init()
 		}
 	} catch (const winrt::hresult_error &err) {
 		blog(LOG_ERROR, "winrt_dispatcher_init (0x%08X): %ls",
-		     err.to_abi(), err.message().c_str());
+		     err.to_abi().value, err.message().c_str());
 	} catch (...) {
 		blog(LOG_ERROR, "winrt_dispatcher_init (0x%08X)",
-		     winrt::to_hresult());
+		     winrt::to_hresult().value);
 	}
 
 	return dispatcher;
@@ -57,8 +57,9 @@ winrt_dispatcher_free(struct winrt_disaptcher *dispatcher)
 try {
 	delete dispatcher;
 } catch (const winrt::hresult_error &err) {
-	blog(LOG_ERROR, "winrt_dispatcher_free (0x%08X): %ls", err.to_abi(),
-	     err.message().c_str());
+	blog(LOG_ERROR, "winrt_dispatcher_free (0x%08X): %ls",
+	     err.to_abi().value, err.message().c_str());
 } catch (...) {
-	blog(LOG_ERROR, "winrt_dispatcher_free (0x%08X)", winrt::to_hresult());
+	blog(LOG_ERROR, "winrt_dispatcher_free (0x%08X)",
+	     winrt::to_hresult().value);
 }
