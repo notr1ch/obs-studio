@@ -87,19 +87,17 @@ static void a_free(void *ptr)
 #endif
 }
 
-static struct base_allocator alloc = {a_malloc, a_realloc, a_free};
+const static struct base_allocator alloc = {a_malloc, a_realloc, a_free};
 static long num_allocs = 0;
 
 void base_set_allocator(struct base_allocator *defs)
 {
-	memcpy(&alloc, defs, sizeof(struct base_allocator));
+	//intentional no-op, retained for API compatibility
 }
 
 void *bmalloc(size_t size)
 {
 	void *ptr = alloc.malloc(size);
-	if (!ptr && !size)
-		ptr = alloc.malloc(1);
 	if (!ptr) {
 		os_breakpoint();
 		bcrash("Out of memory while trying to allocate %lu bytes",
@@ -116,8 +114,6 @@ void *brealloc(void *ptr, size_t size)
 		os_atomic_inc_long(&num_allocs);
 
 	ptr = alloc.realloc(ptr, size);
-	if (!ptr && !size)
-		ptr = alloc.realloc(ptr, 1);
 	if (!ptr) {
 		os_breakpoint();
 		bcrash("Out of memory while trying to allocate %lu bytes",
@@ -148,8 +144,6 @@ int base_get_alignment(void)
 void *bmemdup(const void *ptr, size_t size)
 {
 	void *out = bmalloc(size);
-	if (size)
-		memcpy(out, ptr, size);
-
+	memcpy(out, ptr, size);
 	return out;
 }
