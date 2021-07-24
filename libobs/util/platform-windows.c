@@ -36,20 +36,10 @@
 
 #define MAX_SZ_LEN 256
 
-static bool have_clockfreq = false;
 static LARGE_INTEGER clock_freq;
+static uint64_t freq_to_ns;
 static uint32_t winver = 0;
 static char win_release_id[MAX_SZ_LEN] = "unavailable";
-
-static inline uint64_t get_clockfreq(void)
-{
-	if (!have_clockfreq) {
-		QueryPerformanceFrequency(&clock_freq);
-		have_clockfreq = true;
-	}
-
-	return clock_freq.QuadPart;
-}
 
 static inline uint32_t get_winver(void)
 {
@@ -424,9 +414,13 @@ void os_cpu_usage_info_destroy(os_cpu_usage_info_t *info)
 
 bool os_sleepto_ns(uint64_t time_target)
 {
-	const uint64_t freq = get_clockfreq();
-	const LONGLONG count_target =
-		util_mul_div64(time_target, freq, 1000000000);
+	LONGLONG count_target;
+
+	if (freq_to_ns)
+		count_target = time_target * freq_to_ns;
+	else
+		count_target = util_mul_div64(time_target, clock_freq.QuadPart,
+					      1000000000);
 
 	LARGE_INTEGER count;
 	QueryPerformanceCounter(&count);
@@ -435,7 +429,7 @@ bool os_sleepto_ns(uint64_t time_target)
 	if (stall) {
 		const DWORD milliseconds =
 			(DWORD)(((count_target - count.QuadPart) * 1000.0) /
-				freq);
+				clock_freq.QuadPart);
 		if (milliseconds > 1)
 			Sleep(milliseconds - 1);
 
@@ -482,8 +476,13 @@ uint64_t os_gettime_ns(void)
 {
 	LARGE_INTEGER current_time;
 	QueryPerformanceCounter(&current_time);
-	return util_mul_div64(current_time.QuadPart, 1000000000,
-			      get_clockfreq());
+
+	if (freq_to_ns) {
+		return current_time.QuadPart * freq_to_ns;
+	} else {
+		return util_mul_div64(current_time.QuadPart, 1000000000,
+				      clock_freq.QuadPart);
+	}
 }
 
 /* returns [folder]\[name] on windows */
@@ -885,6 +884,12 @@ BOOL WINAPI DllMain(HINSTANCE hinst_dll, DWORD reason, LPVOID reserved)
 
 	case DLL_PROCESS_ATTACH:
 		timeBeginPeriod(1);
+		QueryPerformanceFrequency(&clock_freq);
+		if (clock_freq.QuadPart > 1000000000 ||
+		    1000000000 % clock_freq.QuadPart != 0)
+			freq_to_ns = 0;
+		else
+			freq_to_ns = 1000000000 / clock_freq.QuadPart;
 #ifdef PTW32_STATIC_LIB
 		pthread_win32_process_attach_np();
 #endif
