@@ -43,6 +43,7 @@
 
 #include <util/platform.h>
 #include <util/threading.h>
+#include <util/rng.h>
 #include <util/util.hpp>
 
 #include <QPointer>
