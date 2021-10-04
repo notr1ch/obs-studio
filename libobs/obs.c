@@ -1780,7 +1780,10 @@ static obs_source_t *obs_load_source_type(obs_data_t *source_data)
 	obs_source_set_sync_offset(source, sync);
 
 	obs_data_set_default_int(source_data, "mixers", 0x3F);
-	mixers = (uint32_t)obs_data_get_int(source_data, "mixers");
+	if (prev_ver < MAKE_SEMANTIC_VERSION(27, 1, 3) && !strcmp(id, "scene"))
+		mixers = 0xFF;
+	else
+		mixers = (uint32_t)obs_data_get_int(source_data, "mixers");
 	obs_source_set_audio_mixers(source, mixers);
 
 	obs_data_set_default_int(source_data, "flags", source->default_flags);
