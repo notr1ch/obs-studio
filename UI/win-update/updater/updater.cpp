@@ -46,6 +46,8 @@ int totalFileSize = 0;
 int completedFileSize = 0;
 static int completedUpdates = 0;
 
+wchar_t obs_base_directory[MAX_PATH];
+
 struct LastError {
 	DWORD code;
 	inline LastError() { code = GetLastError(); }
@@ -496,6 +498,11 @@ static inline DWORD WaitIfOBS(DWORD id, const wchar_t *expected)
 		return WAITIFOBS_WRONG_PROCESS;
 
 	if (!GetProcessImageFileName(proc, path, _countof(path)))
+		return WAITIFOBS_WRONG_PROCESS;
+
+	// check it's actually our exe that's running
+	size_t len = wcslen(obs_base_directory);
+	if (wcsncmp(path, obs_base_directory, len))
 		return WAITIFOBS_WRONG_PROCESS;
 
 	name = wcsrchr(path, L'\\');
@@ -1506,7 +1513,7 @@ static bool Update(wchar_t *cmdLine)
 				 SHGFP_TYPE_CURRENT, regsvr);
 		StringCbCat(regsvr, sizeof(regsvr), L"\\regsvr32.exe");
 
-		GetCurrentDirectoryW(_countof(src), src);
+		StringCbCopy(src, sizeof(src), obs_base_directory);
 		StringCbCat(src, sizeof(src),
 			    L"\\data\\obs-plugins\\win-dshow\\");
 
@@ -1601,13 +1608,10 @@ static void CancelUpdate(bool quit)
 
 static void LaunchOBS()
 {
-	wchar_t cwd[MAX_PATH];
 	wchar_t newCwd[MAX_PATH];
 	wchar_t obsPath[MAX_PATH];
 
-	GetCurrentDirectory(_countof(cwd) - 1, cwd);
-
-	StringCbCopy(obsPath, sizeof(obsPath), cwd);
+	StringCbCopy(obsPath, sizeof(obsPath), obs_base_directory);
 	StringCbCat(obsPath, sizeof(obsPath),
 		    is32bit ? L"\\bin\\32bit" : L"\\bin\\64bit");
 	SetCurrentDirectory(obsPath);
@@ -1617,7 +1621,7 @@ static void LaunchOBS()
 		    is32bit ? L"\\obs32.exe" : L"\\obs64.exe");
 
 	if (!FileExists(obsPath)) {
-		StringCbCopy(obsPath, sizeof(obsPath), cwd);
+		StringCbCopy(obsPath, sizeof(obsPath), obs_base_directory);
 		StringCbCat(obsPath, sizeof(obsPath), L"\\bin\\32bit");
 		SetCurrentDirectory(obsPath);
 		StringCbCopy(newCwd, sizeof(newCwd), obsPath);
@@ -1748,7 +1752,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int)
 	INITCOMMONCONTROLSEX icce;
 
 	wchar_t cwd[MAX_PATH];
-	wchar_t newPath[MAX_PATH];
 	GetCurrentDirectoryW(_countof(cwd) - 1, cwd);
 
 	is32bit = wcsstr(cwd, L"bin\\32bit") != nullptr;
@@ -1771,9 +1774,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int)
 		/* return code 1 =  user wanted to launch OBS */
 		if (RestartAsAdmin(lpCmdLine, cwd) == 1) {
 			StringCbCat(cwd, sizeof(cwd), L"\\..\\..");
-			GetFullPathName(cwd, _countof(newPath), newPath,
-					nullptr);
-			SetCurrentDirectory(newPath);
+			GetFullPathName(cwd, _countof(obs_base_directory),
+					obs_base_directory, nullptr);
+			SetCurrentDirectory(obs_base_directory);
 
 			LaunchOBS();
 		}
@@ -1786,8 +1789,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int)
 		return 0;
 	} else {
 		StringCbCat(cwd, sizeof(cwd), L"\\..\\..");
-		GetFullPathName(cwd, _countof(newPath), newPath, nullptr);
-		SetCurrentDirectory(newPath);
+		GetFullPathName(cwd, _countof(obs_base_directory),
+				obs_base_directory, nullptr);
+		SetCurrentDirectory(obs_base_directory);
 
 		hinstMain = hInstance;
 

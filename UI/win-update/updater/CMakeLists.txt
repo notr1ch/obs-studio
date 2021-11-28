@@ -48,5 +48,6 @@ target_link_libraries(updater
 	comctl32
 	shell32
 	winhttp
+	psapi
 	)
 set_target_properties(updater PROPERTIES FOLDER "frontend")
