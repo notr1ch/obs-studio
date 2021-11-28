@@ -32,6 +32,7 @@ class VCamFilter : public DShow::OutputFilter {
 	placeholder_t placeholder;
 	uint32_t cx = DEFAULT_CX;
 	uint32_t cy = DEFAULT_CY;
+	uint32_t last_output_cx, last_output_cy;
 	DShow::VideoFormat format;
 	uint64_t interval = DEFAULT_INTERVAL;
 	WinHandle thread_start;

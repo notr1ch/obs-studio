@@ -178,9 +178,9 @@ void VCamFilter::Thread()
 	uint64_t cur_time = gettime_100ns();
 	uint64_t filter_time = GetTime();
 
-	cx = GetCX();
-	cy = GetCY();
-	interval = GetInterval();
+	last_output_cx = GetCX();
+	last_output_cy = GetCY();
+	//interval = GetInterval();
 
 	/* ---------------------------------------- */
 	/* load placeholder image                   */
@@ -195,9 +195,10 @@ void VCamFilter::Thread()
 	/* Created dynamically based on output resolution changes */
 	placeholder.scaled_data = nullptr;
 
-	nv12_scale_init(&scaler, TARGET_FORMAT_NV12, cx, cy, cx, cy);
-	nv12_scale_init(&placeholder.scaler, TARGET_FORMAT_NV12, cx, cy,
-			placeholder.cx, placeholder.cy);
+	nv12_scale_init(&scaler, TARGET_FORMAT_NV12, last_output_cx,
+			last_output_cy, cx, cy);
+	nv12_scale_init(&placeholder.scaler, TARGET_FORMAT_NV12, last_output_cx,
+			last_output_cy, placeholder.cx, placeholder.cy);
 
 	UpdatePlaceholder();
 
@@ -247,7 +248,8 @@ void VCamFilter::Frame(uint64_t ts)
 		new_interval = GetInterval();
 	}
 
-	if (new_cx != cx || new_cy != cy || new_interval != interval) {
+	if (new_cx != cx || new_cy != cy || new_interval != interval ||
+	    GetCX() != last_output_cx || GetCY() != last_output_cy) {
 		/* The res / FPS of the video coming from OBS has
 		   changed, update parameters as needed */
 		if (in_obs) {
@@ -263,6 +265,8 @@ void VCamFilter::Frame(uint64_t ts)
 
 		cx = new_cx;
 		cy = new_cy;
+		last_output_cx = GetCX();
+		last_output_cy = GetCY();
 		interval = new_interval;
 
 		UpdatePlaceholder();
