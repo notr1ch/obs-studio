@@ -187,6 +187,27 @@ unlock:
 	pthread_mutex_unlock(&cd->sidechain_mutex);
 }
 
+static void compressor_filter_remove(void *data, obs_source_t *parent)
+{
+	struct compressor_data *cd = (struct compressor_data *)data;
+
+	pthread_mutex_lock(&cd->sidechain_update_mutex);
+
+	if (cd->weak_sidechain) {
+		obs_source_t *sidechain = get_sidechain(cd);
+		if (sidechain) {
+			obs_source_remove_audio_capture_callback(
+				sidechain, sidechain_capture, cd);
+			obs_source_release(sidechain);
+		}
+
+		obs_weak_source_release(cd->weak_sidechain);
+		cd->weak_sidechain = NULL;
+	}
+
+	pthread_mutex_unlock(&cd->sidechain_update_mutex);
+}
+
 static void compressor_update(void *data, obs_data_t *s)
 {
 	struct compressor_data *cd = data;
@@ -286,17 +307,6 @@ static void *compressor_create(obs_data_t *settings, obs_source_t *filter)
 static void compressor_destroy(void *data)
 {
 	struct compressor_data *cd = data;
-
-	if (cd->weak_sidechain) {
-		obs_source_t *sidechain = get_sidechain(cd);
-		if (sidechain) {
-			obs_source_remove_audio_capture_callback(
-				sidechain, sidechain_capture, cd);
-			obs_source_release(sidechain);
-		}
-
-		obs_weak_source_release(cd->weak_sidechain);
-	}
 
 	for (size_t i = 0; i < MAX_AUDIO_CHANNELS; i++) {
 		circlebuf_free(&cd->sidechain_data[i]);
@@ -546,6 +556,7 @@ struct obs_source_info compressor_filter = {
 	.destroy = compressor_destroy,
 	.update = compressor_update,
 	.filter_audio = compressor_filter_audio,
+	.filter_remove = compressor_filter_remove,
 	.video_tick = compressor_tick,
 	.get_defaults = compressor_defaults,
 	.get_properties = compressor_properties,
