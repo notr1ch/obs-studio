@@ -291,6 +291,8 @@ void nvenc_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "gpu", 0);
 	obs_data_set_default_int(settings, "bf", 2);
 	obs_data_set_default_bool(settings, "repeat_headers", false);
+	obs_data_set_default_string(settings, "preset_v2", "p4");
+	obs_data_set_default_string(settings, "tuning", "");
 }
 
 static bool rate_control_modified(obs_properties_t *ppts, obs_property_t *p,
@@ -352,21 +354,50 @@ obs_properties_t *nvenc_properties_internal(bool ffmpeg)
 			       obs_module_text("KeyframeIntervalSec"), 0, 10,
 			       1);
 
-	p = obs_properties_add_list(props, "preset", obs_module_text("Preset"),
-				    OBS_COMBO_TYPE_LIST,
-				    OBS_COMBO_FORMAT_STRING);
+	if (ffmpeg) {
+		p = obs_properties_add_list(props, "preset",
+					    obs_module_text("Preset"),
+					    OBS_COMBO_TYPE_LIST,
+					    OBS_COMBO_FORMAT_STRING);
 
 #define add_preset(val)                                                       \
 	obs_property_list_add_string(p, obs_module_text("NVENC.Preset." val), \
 				     val)
-	add_preset("mq");
-	add_preset("hq");
-	add_preset("default");
-	add_preset("hp");
-	add_preset("ll");
-	add_preset("llhq");
-	add_preset("llhp");
+		add_preset("mq");
+		add_preset("hq");
+		add_preset("default");
+		add_preset("hp");
+		add_preset("ll");
+		add_preset("llhq");
+		add_preset("llhp");
 #undef add_preset
+	} else {
+		p = obs_properties_add_list(props, "preset_v2",
+					    obs_module_text("Preset"),
+					    OBS_COMBO_TYPE_LIST,
+					    OBS_COMBO_FORMAT_STRING);
+
+		obs_property_list_add_string(p, "P1", "p1");
+		obs_property_list_add_string(p, "P2", "p2");
+		obs_property_list_add_string(p, "P3", "p3");
+		obs_property_list_add_string(p, "P4", "p4");
+		obs_property_list_add_string(p, "P5", "p5");
+		obs_property_list_add_string(p, "P6", "p6");
+		obs_property_list_add_string(p, "P7", "p7");
+
+		p = obs_properties_add_list(props, "tuning",
+					    obs_module_text("Tuning"),
+					    OBS_COMBO_TYPE_LIST,
+					    OBS_COMBO_FORMAT_STRING);
+
+		obs_property_list_add_string(p, obs_module_text("Default"), "");
+		obs_property_list_add_string(p, obs_module_text("MaxQuality"),
+					     "mq");
+		obs_property_list_add_string(p, obs_module_text("LowLatency"),
+					     "ll");
+		obs_property_list_add_string(
+			p, obs_module_text("UltraLowLatency"), "ull");
+	}
 
 	p = obs_properties_add_list(props, "profile",
 				    obs_module_text("Profile"),

@@ -331,7 +331,8 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 	int max_bitrate = (int)obs_data_get_int(settings, "max_bitrate");
 	int cqp = (int)obs_data_get_int(settings, "cqp");
 	int keyint_sec = (int)obs_data_get_int(settings, "keyint_sec");
-	const char *preset = obs_data_get_string(settings, "preset");
+	const char *preset = obs_data_get_string(settings, "preset_migrated");
+	const char *tuning = obs_data_get_string(settings, "tuning");
 	const char *profile = obs_data_get_string(settings, "profile");
 	bool lookahead = obs_data_get_bool(settings, "lookahead");
 	int bf = (int)obs_data_get_int(settings, "bf");
@@ -347,43 +348,43 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 	/* -------------------------- */
 	/* get preset                 */
 
-	GUID nv_preset = NV_ENC_PRESET_DEFAULT_GUID;
+	GUID nv_preset = NV_ENC_PRESET_P5_GUID;
+	NV_ENC_TUNING_INFO nv_tuning = NV_ENC_TUNING_INFO_UNDEFINED;
+
 	bool twopass = false;
-	bool hp = false;
-	bool ll = false;
+	//bool hp = false;
+	//bool ll = false;
 
-	if (astrcmpi(preset, "hq") == 0) {
-		nv_preset = NV_ENC_PRESET_HQ_GUID;
+	if (astrcmpi(preset, "p1") == 0)
+		nv_preset = NV_ENC_PRESET_P1_GUID;
+	else if (astrcmpi(preset, "p2") == 0)
+		nv_preset = NV_ENC_PRESET_P2_GUID;
+	else if (astrcmpi(preset, "p3") == 0)
+		nv_preset = NV_ENC_PRESET_P3_GUID;
+	else if (astrcmpi(preset, "p4") == 0)
+		nv_preset = NV_ENC_PRESET_P4_GUID;
+	else if (astrcmpi(preset, "p5") == 0)
+		nv_preset = NV_ENC_PRESET_P5_GUID;
+	else if (astrcmpi(preset, "p6") == 0)
+		nv_preset = NV_ENC_PRESET_P6_GUID;
+	else if (astrcmpi(preset, "p7") == 0)
+		nv_preset = NV_ENC_PRESET_P7_GUID;
+	else
+		nv_preset = NV_ENC_PRESET_P4_GUID;
 
-	} else if (astrcmpi(preset, "mq") == 0) {
-		nv_preset = NV_ENC_PRESET_HQ_GUID;
-		twopass = true;
-
-	} else if (astrcmpi(preset, "hp") == 0) {
-		nv_preset = NV_ENC_PRESET_HP_GUID;
-		hp = true;
-
-	} else if (astrcmpi(preset, "ll") == 0) {
-		nv_preset = NV_ENC_PRESET_LOW_LATENCY_DEFAULT_GUID;
-		ll = true;
-
-	} else if (astrcmpi(preset, "llhq") == 0) {
-		nv_preset = NV_ENC_PRESET_LOW_LATENCY_HQ_GUID;
-		ll = true;
-
-	} else if (astrcmpi(preset, "llhp") == 0) {
-		nv_preset = NV_ENC_PRESET_LOW_LATENCY_HP_GUID;
-		hp = true;
-		ll = true;
-	}
+	if (astrcmpi(tuning, "ll") == 0)
+		nv_tuning = NV_ENC_TUNING_INFO_LOW_LATENCY;
+	else if (astrcmpi(tuning, "ull") == 0)
+		nv_tuning = NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;
+	else if (astrcmpi(tuning, "hq") == 0)
+		nv_tuning = NV_ENC_TUNING_INFO_HIGH_QUALITY;
 
 	const bool rc_lossless = astrcmpi(rc, "lossless") == 0;
 	bool lossless = rc_lossless;
 	if (rc_lossless) {
 		lossless = nv_get_cap(enc, NV_ENC_CAPS_SUPPORT_LOSSLESS_ENCODE);
 		if (lossless) {
-			nv_preset = hp ? NV_ENC_PRESET_LOSSLESS_HP_GUID
-				       : NV_ENC_PRESET_LOSSLESS_DEFAULT_GUID;
+			nv_tuning = NV_ENC_TUNING_INFO_LOSSLESS;
 		} else {
 			warn("lossless encode is not supported, ignoring");
 		}
@@ -395,9 +396,9 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 	NV_ENC_PRESET_CONFIG preset_config = {NV_ENC_PRESET_CONFIG_VER,
 					      {NV_ENC_CONFIG_VER}};
 
-	err = nv.nvEncGetEncodePresetConfig(enc->session,
-					    NV_ENC_CODEC_H264_GUID, nv_preset,
-					    &preset_config);
+	err = nv.nvEncGetEncodePresetConfigEx(enc->session,
+					      NV_ENC_CODEC_H264_GUID, nv_preset,
+					      nv_tuning, &preset_config);
 	if (nv_failed(enc->encoder, err, __FUNCTION__,
 		      "nvEncGetEncodePresetConfig")) {
 		return false;
@@ -424,6 +425,7 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 	params->version = NV_ENC_INITIALIZE_PARAMS_VER;
 	params->encodeGUID = NV_ENC_CODEC_H264_GUID;
 	params->presetGUID = nv_preset;
+	params->tuningInfo = nv_tuning;
 	params->encodeWidth = voi->width;
 	params->encodeHeight = voi->height;
 	params->darWidth = darWidth;
@@ -482,22 +484,20 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 		enc->rc_lookahead = use_profile_lookahead
 					    ? config->rcParams.lookaheadDepth
 					    : 8;
-	}
 
-	int buf_count = max(4, config->frameIntervalP * 2 * 2);
-	if (lookahead) {
-		buf_count = max(buf_count, config->frameIntervalP +
-						   enc->rc_lookahead +
-						   EXTRA_BUFFERS);
-	}
+		int buf_count = max(4, config->frameIntervalP * 2 * 2);
+		if (lookahead) {
+			buf_count = max(buf_count, config->frameIntervalP +
+							   enc->rc_lookahead +
+							   EXTRA_BUFFERS);
+		}
 
-	buf_count = min(64, buf_count);
-	enc->buf_count = buf_count;
+		buf_count = min(64, buf_count);
+		enc->buf_count = buf_count;
 
-	const int output_delay = buf_count - 1;
-	enc->output_delay = output_delay;
+		const int output_delay = buf_count - 1;
+		enc->output_delay = output_delay;
 
-	if (lookahead) {
 		const int lkd_bound = output_delay - config->frameIntervalP - 4;
 		if (lkd_bound >= 0) {
 			config->rcParams.enableLookahead = 1;
@@ -526,9 +526,6 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 		nv_get_cap(enc, NV_ENC_CAPS_SUPPORT_DYN_BITRATE_CHANGE) &&
 		!lookahead;
 
-	config->rcParams.rateControlMode = twopass ? NV_ENC_PARAMS_RC_VBR_HQ
-						   : NV_ENC_PARAMS_RC_VBR;
-
 	if (astrcmpi(rc, "cqp") == 0 || rc_lossless) {
 		if (lossless) {
 			h264_config->qpPrimeYZeroTransformBypassFlag = 1;
@@ -544,12 +541,18 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 		bitrate = 0;
 		max_bitrate = 0;
 
-	} else if (astrcmpi(rc, "vbr") != 0) { /* CBR by default */
+	} else if (astrcmpi(rc, "vbr") == 0) {
+		config->rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
+	} else {
+		// CBR by default
 		h264_config->outputBufferingPeriodSEI = 1;
-		config->rcParams.rateControlMode =
-			twopass ? NV_ENC_PARAMS_RC_2_PASS_QUALITY
-				: NV_ENC_PARAMS_RC_CBR;
+		config->rcParams.rateControlMode = NV_ENC_PARAMS_RC_CBR;
 	}
+
+	if (nv_tuning == NV_ENC_TUNING_INFO_HIGH_QUALITY)
+		config->rcParams.multiPass = NV_ENC_TWO_PASS_FULL_RESOLUTION;
+	else
+		config->rcParams.multiPass = NV_ENC_TWO_PASS_QUARTER_RESOLUTION;
 
 	h264_config->outputPictureTimingSEI = 1;
 	config->rcParams.averageBitRate = bitrate * 1000;
@@ -580,6 +583,7 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 	     "\tcqp:          %d\n"
 	     "\tkeyint:       %d\n"
 	     "\tpreset:       %s\n"
+	     "\ttuning:       %s\n"
 	     "\tprofile:      %s\n"
 	     "\twidth:        %d\n"
 	     "\theight:       %d\n"
@@ -587,9 +591,9 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings,
 	     "\tb-frames:     %d\n"
 	     "\tlookahead:    %s\n"
 	     "\tpsycho_aq:    %s\n",
-	     rc, bitrate, cqp, gop_size, preset, profile, enc->cx, enc->cy,
-	     twopass ? "true" : "false", bf, lookahead ? "true" : "false",
-	     psycho_aq ? "true" : "false");
+	     rc, bitrate, cqp, gop_size, preset, tuning, profile, enc->cx,
+	     enc->cy, twopass ? "true" : "false", bf,
+	     lookahead ? "true" : "false", psycho_aq ? "true" : "false");
 
 	return true;
 }
@@ -624,6 +628,44 @@ static bool init_textures(struct nvenc_data *enc)
 	return true;
 }
 
+static bool migrate_settings(obs_data_t *settings)
+{
+	const char *preset_v2 = obs_data_get_string(settings, "preset_v2");
+	if (preset_v2[0])
+		return true;
+
+	const char *preset = obs_data_get_string(settings, "preset");
+	const char *tuning;
+
+	if (astrcmpi(preset, "hq") == 0) {
+		preset = "p4";
+		tuning = "hq";
+	} else if (astrcmpi(preset, "mq") == 0) {
+		preset = "p5";
+		tuning = "hq";
+	} else if (astrcmpi(preset, "hp") == 0) {
+		preset = "p1";
+		tuning = "hq";
+	} else if (astrcmpi(preset, "ll") == 0) {
+		preset = "p3";
+		tuning = "ll";
+	} else if (astrcmpi(preset, "llhq") == 0) {
+		preset = "p4";
+		tuning = "ll";
+	} else if (astrcmpi(preset, "llhp") == 0) {
+		preset = "p1";
+		tuning = "ll";
+	} else {
+		preset = "p4";
+		tuning = "hq";
+	}
+
+	obs_data_set_string(settings, "preset_v2", preset);
+	obs_data_set_string(settings, "tuning", tuning);
+
+	return true;
+}
+
 static void nvenc_destroy(void *data);
 
 static void *nvenc_create_internal(obs_data_t *settings, obs_encoder_t *encoder,
@@ -644,6 +686,9 @@ static void *nvenc_create_internal(obs_data_t *settings, obs_encoder_t *encoder,
 		goto fail;
 	}
 	if (!init_session(enc)) {
+		goto fail;
+	}
+	if (!migrate_settings(settings)) {
 		goto fail;
 	}
 	if (!init_encoder(enc, settings, psycho_aq)) {
