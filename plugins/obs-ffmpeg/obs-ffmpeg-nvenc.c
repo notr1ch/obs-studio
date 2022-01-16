@@ -391,8 +391,8 @@ obs_properties_t *nvenc_properties_internal(bool ffmpeg)
 					    OBS_COMBO_FORMAT_STRING);
 
 		obs_property_list_add_string(p, obs_module_text("Default"), "");
-		obs_property_list_add_string(p, obs_module_text("MaxQuality"),
-					     "mq");
+		obs_property_list_add_string(p, obs_module_text("HighQuality"),
+					     "hq");
 		obs_property_list_add_string(p, obs_module_text("LowLatency"),
 					     "ll");
 		obs_property_list_add_string(
