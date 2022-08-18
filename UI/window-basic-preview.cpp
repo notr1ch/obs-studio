@@ -451,13 +451,13 @@ static vec2 GetItemSize(obs_sceneitem_t *item)
 	return size;
 }
 
-void OBSBasicPreview::GetStretchHandleData(const vec2 &pos, bool ignoreGroup)
+bool OBSBasicPreview::GetStretchHandleData(const vec2 &pos, bool ignoreGroup)
 {
 	OBSBasic *main = reinterpret_cast<OBSBasic *>(App()->GetMainWindow());
 
 	OBSScene scene = main->GetCurrentScene();
 	if (!scene)
-		return;
+		return false;
 
 	float scale = main->previewScale / main->GetDevicePixelRatio();
 	vec2 scaled_pos = pos;
@@ -465,54 +465,57 @@ void OBSBasicPreview::GetStretchHandleData(const vec2 &pos, bool ignoreGroup)
 	HandleFindData data(scaled_pos, scale);
 	obs_scene_enum_items(scene, FindHandleAtPos, &data);
 
-	stretchItem = std::move(data.item);
 	stretchHandle = data.handle;
 
+	if (stretchHandle == ItemHandle::None)
+		return false;
+
+	stretchItem = std::move(data.item);
 	rotateAngle = data.angle;
 	rotatePoint = data.rotatePoint;
 	offsetPoint = data.offsetPoint;
 
-	if (stretchHandle != ItemHandle::None) {
-		matrix4 boxTransform;
-		vec3 itemUL;
-		float itemRot;
+	matrix4 boxTransform;
+	vec3 itemUL;
+	float itemRot;
 
-		stretchItemSize = GetItemSize(stretchItem);
+	stretchItemSize = GetItemSize(stretchItem);
 
-		obs_sceneitem_get_box_transform(stretchItem, &boxTransform);
-		itemRot = obs_sceneitem_get_rot(stretchItem);
-		vec3_from_vec4(&itemUL, &boxTransform.t);
+	obs_sceneitem_get_box_transform(stretchItem, &boxTransform);
+	itemRot = obs_sceneitem_get_rot(stretchItem);
+	vec3_from_vec4(&itemUL, &boxTransform.t);
 
-		/* build the item space conversion matrices */
-		matrix4_identity(&itemToScreen);
-		matrix4_rotate_aa4f(&itemToScreen, &itemToScreen, 0.0f, 0.0f,
-				    1.0f, RAD(itemRot));
-		matrix4_translate3f(&itemToScreen, &itemToScreen, itemUL.x,
-				    itemUL.y, 0.0f);
+	/* build the item space conversion matrices */
+	matrix4_identity(&itemToScreen);
+	matrix4_rotate_aa4f(&itemToScreen, &itemToScreen, 0.0f, 0.0f, 1.0f,
+			    RAD(itemRot));
+	matrix4_translate3f(&itemToScreen, &itemToScreen, itemUL.x, itemUL.y,
+			    0.0f);
 
-		matrix4_identity(&screenToItem);
-		matrix4_translate3f(&screenToItem, &screenToItem, -itemUL.x,
-				    -itemUL.y, 0.0f);
-		matrix4_rotate_aa4f(&screenToItem, &screenToItem, 0.0f, 0.0f,
-				    1.0f, RAD(-itemRot));
+	matrix4_identity(&screenToItem);
+	matrix4_translate3f(&screenToItem, &screenToItem, -itemUL.x, -itemUL.y,
+			    0.0f);
+	matrix4_rotate_aa4f(&screenToItem, &screenToItem, 0.0f, 0.0f, 1.0f,
+			    RAD(-itemRot));
 
-		obs_sceneitem_get_crop(stretchItem, &startCrop);
-		obs_sceneitem_get_pos(stretchItem, &startItemPos);
+	obs_sceneitem_get_crop(stretchItem, &startCrop);
+	obs_sceneitem_get_pos(stretchItem, &startItemPos);
 
-		obs_source_t *source = obs_sceneitem_get_source(stretchItem);
-		cropSize.x = float(obs_source_get_width(source) -
-				   startCrop.left - startCrop.right);
-		cropSize.y = float(obs_source_get_height(source) -
-				   startCrop.top - startCrop.bottom);
+	obs_source_t *source = obs_sceneitem_get_source(stretchItem);
+	cropSize.x = float(obs_source_get_width(source) - startCrop.left -
+			   startCrop.right);
+	cropSize.y = float(obs_source_get_height(source) - startCrop.top -
+			   startCrop.bottom);
 
-		stretchGroup = obs_sceneitem_get_group(scene, stretchItem);
-		if (stretchGroup && !ignoreGroup) {
-			obs_sceneitem_get_draw_transform(stretchGroup,
-							 &invGroupTransform);
-			matrix4_inv(&invGroupTransform, &invGroupTransform);
-			obs_sceneitem_defer_group_resize_begin(stretchGroup);
-		}
+	stretchGroup = obs_sceneitem_get_group(scene, stretchItem);
+	if (stretchGroup && !ignoreGroup) {
+		obs_sceneitem_get_draw_transform(stretchGroup,
+						 &invGroupTransform);
+		matrix4_inv(&invGroupTransform, &invGroupTransform);
+		obs_sceneitem_defer_group_resize_begin(stretchGroup);
 	}
+
+	return true;
 }
 
 void OBSBasicPreview::keyPressEvent(QKeyEvent *event)
@@ -646,13 +649,16 @@ void OBSBasicPreview::mousePressEvent(QMouseEvent *event)
 
 void OBSBasicPreview::UpdateCursor(uint32_t &flags)
 {
+	if (!flags && (cursor().shape() != Qt::OpenHandCursor || !scrollMode)) {
+		unsetCursor();
+		return;
+	}
+
 	if (obs_sceneitem_locked(stretchItem)) {
 		unsetCursor();
 		return;
 	}
 
-	if (!flags && (cursor().shape() != Qt::OpenHandCursor || !scrollMode))
-		unsetCursor();
 	if (cursor().shape() != Qt::ArrowCursor)
 		return;
 
@@ -1679,8 +1685,10 @@ void OBSBasicPreview::mouseMoveEvent(QMouseEvent *event)
 		}
 	}
 
-	if (updateCursor) {
-		GetStretchHandleData(startPos, true);
+	bool had_old_handle = (stretchHandle != ItemHandle::None);
+	bool found_new_item = GetStretchHandleData(startPos, true);
+
+	if (updateCursor && (found_new_item || had_old_handle)) {
 		uint32_t stretchFlags = (uint32_t)stretchHandle;
 		UpdateCursor(stretchFlags);
 	}
