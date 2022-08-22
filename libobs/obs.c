@@ -2285,8 +2285,30 @@ void obs_load_sources(obs_data_array_t *array, obs_load_source_cb cb,
 		obs_data_release(source_data);
 	}
 
-	for (i = 0; i < sources.num; i++)
+	for (i = 0; i < sources.num; i++) {
+		obs_weak_source_t *weak =
+			obs_source_get_weak_source(sources.array[i]);
+
 		obs_source_release(sources.array[i]);
+
+		if (obs_weak_source_expired(weak)) {
+			blog(LOG_ERROR,
+			     "A source was destroyed after load!! Orphaned source?");
+#ifdef _DEBUG
+			/* There's a source in the currently loading scene data that
+			 * is orphaned - that is, it does not belong to any scene.
+			 * This means there was a reference to the source when OBS
+			 * was last shut down, so it was saved to the scene data, but
+			 * after loading, it does not belong on any scene. This
+			 * strongly indicates that the last OBS session leaked a
+			 * reference to a source that was deleted from a scene. Fix
+			 * the leak and this breakpoint should no longer be hit. */
+			os_breakpoint();
+#endif
+		}
+
+		obs_weak_source_release(weak);
+	}
 
 	pthread_mutex_unlock(&data->sources_mutex);
 
