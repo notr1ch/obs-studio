@@ -970,10 +970,10 @@ static inline void ResetQuickTransitionText(QuickTransition *qt)
 	qt->button->setText(MakeQuickTransitionText(qt));
 }
 
-QMenu *OBSBasic::CreatePerSceneTransitionMenu()
+QMenu *OBSBasic::CreatePerSceneTransitionMenu(QWidget *parent)
 {
 	OBSSource scene = GetCurrentSceneSource();
-	QMenu *menu = new QMenu(QTStr("TransitionOverride"));
+	QMenu *menu = new QMenu(QTStr("TransitionOverride"), parent);
 	QAction *action;
 
 	OBSDataAutoRelease data = obs_source_get_private_settings(scene);

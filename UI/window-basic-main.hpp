@@ -320,18 +320,6 @@ private:
 	QPointer<QMenu> trayMenu;
 	QPointer<QMenu> previewProjector;
 	QPointer<QMenu> studioProgramProjector;
-	QPointer<QMenu> previewProjectorSource;
-	QPointer<QMenu> previewProjectorMain;
-	QPointer<QMenu> sceneProjectorMenu;
-	QPointer<QMenu> sourceProjector;
-	QPointer<QMenu> scaleFilteringMenu;
-	QPointer<QMenu> blendingMethodMenu;
-	QPointer<QMenu> blendingModeMenu;
-	QPointer<QMenu> colorMenu;
-	QPointer<QWidgetAction> colorWidgetAction;
-	QPointer<ColorSelect> colorSelect;
-	QPointer<QMenu> deinterlaceMenu;
-	QPointer<QMenu> perSceneTransitionMenu;
 	QPointer<QObject> shortcutFilter;
 	QPointer<QAction> renameScene;
 	QPointer<QAction> renameSource;
@@ -471,7 +459,7 @@ private:
 
 	void PasteShowHideTransition(obs_sceneitem_t *item, bool show,
 				     obs_source_t *tr);
-	QMenu *CreatePerSceneTransitionMenu();
+	QMenu *CreatePerSceneTransitionMenu(QWidget *parent);
 	QMenu *CreateVisibilityTransitionMenu(bool visible);
 
 	QuickTransition *GetQuickTransition(int id);
@@ -833,7 +821,7 @@ private:
 	void ResizePreview(uint32_t cx, uint32_t cy);
 
 	void AddSource(const char *id);
-	QMenu *CreateAddSourcePopupMenu();
+	QMenu *CreateAddSourcePopupMenu(QWidget *parent);
 	void AddSourcePopupMenu(const QPoint &pos);
 	void copyActionsDynamicProperties();
 
