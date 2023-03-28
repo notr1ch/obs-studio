@@ -1625,12 +1625,6 @@ static string ResString(uint32_t cx, uint32_t cy)
 	return res.str();
 }
 
-/* some nice default output resolution vals */
-static const double vals[] = {1.0, 1.25, (1.0 / 0.75), 1.5,  (1.0 / 0.6), 1.75,
-			      2.0, 2.25, 2.5,          2.75, 3.0};
-
-static const size_t numVals = sizeof(vals) / sizeof(double);
-
 void OBSBasicSettings::ResetDownscales(uint32_t cx, uint32_t cy,
 				       bool ignoreAllSignals)
 {
@@ -1642,6 +1636,13 @@ void OBSBasicSettings::ResetDownscales(uint32_t cx, uint32_t cy,
 	int bestPixelDiff = 0x7FFFFFFF;
 	uint32_t out_cx = outputCX;
 	uint32_t out_cy = outputCY;
+
+	/* some nice default output resolution vals */
+	constexpr double vals[] = {1.0,         1.25, (1.0 / 0.75), 1.5,
+				   (1.0 / 0.6), 1.75, 2.0,          2.25,
+				   2.5,         2.75, 3.0};
+
+	constexpr size_t numVals = sizeof(vals) / sizeof(double);
 
 	advRescale = ui->advOutRescale->lineEdit()->text();
 	advRecRescale = ui->advOutRecRescale->lineEdit()->text();
