@@ -50,11 +50,11 @@ static void *a_malloc(size_t size)
 	return _aligned_malloc(size, ALIGNMENT);
 #elif ALIGNMENT_HACK
 	void *ptr = NULL;
-	long diff;
+	intptr_t diff;
 
 	ptr = malloc(size + ALIGNMENT);
 	if (ptr) {
-		diff = ((~(long)ptr) & (ALIGNMENT - 1)) + 1;
+		diff = ((~(intptr_t)ptr) & (ALIGNMENT - 1)) + 1;
 		ptr = (char *)ptr + diff;
 		((char *)ptr)[-1] = (char)diff;
 	}
@@ -70,7 +70,7 @@ static void *a_realloc(void *ptr, size_t size)
 #ifdef ALIGNED_MALLOC
 	return _aligned_realloc(ptr, size, ALIGNMENT);
 #elif ALIGNMENT_HACK
-	long diff;
+	intptr_t diff;
 
 	if (!ptr)
 		return a_malloc(size);
