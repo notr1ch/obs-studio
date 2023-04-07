@@ -486,6 +486,8 @@ static void volmeter_process_peak(obs_volmeter_t *volmeter,
 	}
 }
 
+// Allows vectorization of the inner loop
+OBS_IMPRECISE_FLOAT_ENABLE
 static void volmeter_process_magnitude(obs_volmeter_t *volmeter,
 				       const struct audio_data *data,
 				       int nr_channels)
@@ -509,6 +511,7 @@ static void volmeter_process_magnitude(obs_volmeter_t *volmeter,
 		channel_nr++;
 	}
 }
+OBS_IMPRECISE_FLOAT_DISABLE
 
 static void volmeter_process_audio_data(obs_volmeter_t *volmeter,
 					const struct audio_data *data)

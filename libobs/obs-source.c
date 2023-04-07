@@ -3988,6 +3988,8 @@ static void downmix_to_mono_planar(struct obs_source *source, uint32_t frames)
 	}
 }
 
+// Allows vectorization of OBS_BALANCE_TYPE_SINE_LAW loop
+OBS_IMPRECISE_FLOAT_ENABLE
 static void process_audio_balancing(struct obs_source *source, uint32_t frames,
 				    float balance, enum obs_balance_type type)
 {
@@ -4018,6 +4020,7 @@ static void process_audio_balancing(struct obs_source *source, uint32_t frames,
 		break;
 	}
 }
+OBS_IMPRECISE_FLOAT_DISABLE
 
 /* resamples/remixes new audio to the designated main audio output format */
 static void process_audio(obs_source_t *source,

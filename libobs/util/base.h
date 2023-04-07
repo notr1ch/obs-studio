@@ -94,6 +94,20 @@ EXPORT void bcrash(const char *format, ...);
 
 #undef PRINTFATTR
 
+// For allowing associative optimizations where they provide extra benefits
+#if defined(_MSC_VER)
+#define OBS_IMPRECISE_FLOAT_ENABLE __pragma(float_control(precise, off, push))
+#define OBS_IMPRECISE_FLOAT_DISABLE __pragma(float_control(pop))
+#elif defined(__GNUC__)
+#define OBS_IMPRECISE_FLOAT_ENABLE \
+	__attribute__((optimize(   \
+		"-fno-trapping-math -fno-signed-zeros -fassociative-math")))
+#define OBS_IMPRECISE_FLOAT_DISABLE
+#else
+#define OBS_IMPRECISE_FLOAT_ENABLE
+#define OBS_IMPRECISE_FLOAT_DISABLE
+#endif
+
 #ifdef __cplusplus
 }
 #endif
