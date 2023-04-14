@@ -10,9 +10,11 @@
 #include "platform.hpp"
 #include "multiview.hpp"
 
-static QList<OBSProjector *> multiviewProjectors;
+using namespace std;
 
-static bool updatingMultiview = false, mouseSwitching, transitionOnDoubleClick;
+static QList<OBSProjector *> multiviewProjectors;
+static mutex multiviewUpdateMutex;
+static bool mouseSwitching, transitionOnDoubleClick;
 
 OBSProjector::OBSProjector(QWidget *widget, obs_source_t *source_, int monitor,
 			   ProjectorType type_)
@@ -145,10 +147,15 @@ void OBSProjector::OBSRenderMultiview(void *data, uint32_t cx, uint32_t cy)
 {
 	OBSProjector *window = (OBSProjector *)data;
 
-	if (updatingMultiview || !window->ready)
+	if (!window->ready)
+		return;
+
+	if (!multiviewUpdateMutex.try_lock())
 		return;
 
 	window->multiview->Render(cx, cy);
+
+	multiviewUpdateMutex.unlock();
 }
 
 void OBSProjector::OBSRender(void *data, uint32_t cx, uint32_t cy)
@@ -383,16 +390,10 @@ int OBSProjector::GetMonitor()
 
 void OBSProjector::UpdateMultiviewProjectors()
 {
-	obs_enter_graphics();
-	updatingMultiview = true;
-	obs_leave_graphics();
+	lock_guard<mutex> lock(multiviewUpdateMutex);
 
 	for (auto &projector : multiviewProjectors)
 		projector->UpdateMultiview();
-
-	obs_enter_graphics();
-	updatingMultiview = false;
-	obs_leave_graphics();
 }
 
 void OBSProjector::RenameProjector(QString oldName, QString newName)
