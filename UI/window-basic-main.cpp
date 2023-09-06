@@ -4776,6 +4776,12 @@ int OBSBasic::ResetVideo()
 		obs_set_video_levels(sdr_white_level, hdr_nominal_peak_level);
 		OBSBasicStats::InitializeValues();
 		OBSProjector::UpdateMultiviewProjectors();
+
+		// Resetting video may have created a new mix, so we should
+		// reset outputs to ensure they aren't pointing to a dangling
+		// mix.
+		if (outputHandler)
+			ResetOutputs();
 	}
 
 	return ret;
