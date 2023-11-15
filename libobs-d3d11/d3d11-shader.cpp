@@ -205,13 +205,13 @@ void gs_shader::BuildConstantBuffer()
 		gs_shader_set_default(&params[i]);
 }
 
-static uint64_t fnv1a_hash(const char *str)
+static uint64_t fnv1a_hash(const char *str, size_t len)
 {
 	const uint64_t FNV_OFFSET = 14695981039346656037ULL;
 	const uint64_t FNV_PRIME = 1099511628211ULL;
 	uint64_t hash = FNV_OFFSET;
-	while (*str) {
-		hash ^= (uint64_t)*str++;
+	for (size_t i = 0; i < len; i++) {
+		hash ^= (uint64_t)str[i];
 		hash *= FNV_PRIME;
 	}
 	return hash;
@@ -223,12 +223,13 @@ void gs_shader::Compile(const char *shaderString, const char *file,
 	ComPtr<ID3D10Blob> errorsBlob;
 	HRESULT hr;
 
+	bool is_cached = false;
 	char hashstr[20];
 
 	if (!shaderString)
 		throw "No shader string specified";
 
-	uint64_t hash = fnv1a_hash(shaderString);
+	uint64_t hash = fnv1a_hash(shaderString, strlen(shaderString));
 	snprintf(hashstr, sizeof(hashstr), "%02llx", hash);
 
 	BPtr program_data =
@@ -240,12 +241,40 @@ void gs_shader::Compile(const char *shaderString, const char *file,
 		cacheFile.open(cachePath, ios::in | ios::binary | ios::ate);
 
 	if (cacheFile.is_open()) {
-		streampos len = cacheFile.tellg();
-		cacheFile.seekg(0, ios::beg);
+		uint64_t checksum;
 
-		device->d3dCreateBlob(len, shader);
-		cacheFile.read((char *)(*shader)->GetBufferPointer(), len);
-	} else {
+		streampos len = cacheFile.tellg();
+		if (len > sizeof(checksum)) {
+			cacheFile.seekg(0, ios::beg);
+
+			len -= sizeof(checksum);
+
+			device->d3dCreateBlob(len, shader);
+			cacheFile.read((char *)(*shader)->GetBufferPointer(),
+				       len);
+			if (cacheFile.good()) {
+				cacheFile.read((char *)&checksum,
+					       sizeof(checksum));
+				if (cacheFile.good()) {
+					uint64_t calculated_checksum = fnv1a_hash(
+						(char *)(*shader)
+							->GetBufferPointer(),
+						len);
+
+					if (calculated_checksum == checksum)
+						is_cached = true;
+				}
+			}
+		}
+
+		// Something went wrong reading the cache file, delete it
+		if (!is_cached) {
+			cacheFile.close();
+			filesystem::remove(cachePath);
+		}
+	}
+
+	if (!is_cached) {
 		hr = device->d3dCompile(shaderString, strlen(shaderString),
 					file, NULL, NULL, "main", target,
 					D3D10_SHADER_OPTIMIZATION_LEVEL3, 0,
@@ -261,6 +290,21 @@ void gs_shader::Compile(const char *shaderString, const char *file,
 		if (cacheFile.is_open()) {
 			cacheFile.write((char *)(*shader)->GetBufferPointer(),
 					(*shader)->GetBufferSize());
+			if (cacheFile.good()) {
+				uint64_t calculated_checksum = fnv1a_hash(
+					(char *)(*shader)->GetBufferPointer(),
+					(*shader)->GetBufferSize());
+
+				cacheFile.write((char *)&calculated_checksum,
+						sizeof(calculated_checksum));
+				if (!cacheFile.good()) {
+					cacheFile.close();
+					filesystem::remove(cachePath);
+				}
+			} else {
+				cacheFile.close();
+				filesystem::remove(cachePath);
+			}
 		}
 	}
 
