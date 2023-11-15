@@ -302,6 +302,10 @@ void gs_device::InitCompiler()
 				module, "D3DDisassemble");
 #endif
 			if (d3dCompile && d3dCreateBlob) {
+				if (ver < 47)
+					blog(LOG_WARNING,
+					     "InitCompiler: Using %s",
+					     d3dcompiler);
 				return;
 			}
 
