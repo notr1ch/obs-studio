@@ -2929,6 +2929,57 @@ static bool vc_runtime_outdated()
 
 	return true;
 }
+
+static bool vc_process_local_dll(const wchar_t *path)
+{
+	wchar_t temp_path[MAX_PATH * 2];
+
+	if (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES) {
+		wcscpy(temp_path, path);
+		wcscat(temp_path, L".deleteme");
+
+		if (!MoveFile(path, temp_path))
+			return false;
+
+		// We don't care if this fails as it's just for cleanup
+		MoveFileEx(temp_path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+
+		return true;
+	}
+
+	return false;
+}
+
+static bool vc_move_local_dlls()
+{
+	bool moved_dll = false;
+	wchar_t obs_directory_path[MAX_PATH * 2];
+
+	static const wchar_t *local_vc_dlls[] = {
+		L"\\MSVCP140.dll",     L"\\msvcp140_1.dll",
+		L"\\msvcp140_2.dll",   L"\\VCRUNTIME140_1.dll",
+		L"\\VCRUNTIME140.dll",
+	};
+
+	if (!GetModuleFileName(NULL, obs_directory_path,
+			       _countof(obs_directory_path)))
+		return false;
+
+	wchar_t *p = wcsrchr(obs_directory_path, '\\');
+	if (!p)
+		return false;
+
+	const wchar_t *dll;
+
+	for (int i = 0; i < _countof(local_vc_dlls); i++) {
+		dll = local_vc_dlls[i];
+		*p = 0;
+		wcscat(obs_directory_path, dll);
+		moved_dll |= vc_process_local_dll(obs_directory_path);
+	}
+
+	return moved_dll;
+}
 #endif
 
 int main(int argc, char *argv[])
@@ -2957,9 +3008,27 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef _WIN32
+
+	// Move local VC redists away if possible and restart if successful
+	if (vc_move_local_dlls()) {
+		STARTUPINFO si = {0};
+		PROCESS_INFORMATION pi = {0};
+
+		si.cb = sizeof(si);
+
+		if (CreateProcess(NULL, GetCommandLine(), NULL, NULL, FALSE, 0,
+			NULL, NULL, &si, &pi))
+		{
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+		}
+		return 1;
+	}
+
 	// Abort as early as possible if MSVC runtime is outdated
 	if (vc_runtime_outdated())
 		return 1;
+
 	// Try to keep this as early as possible
 	install_dll_blocklist_hook();
 
